@@ -1,4 +1,16 @@
 '''
+형태소 분석기 엔진 설치
+cd /opt
+wget https://bitbucket.org/eunjeon/mecab-ko/downloads/mecab-0.996-ko-0.9.2.tar.gz
+tar xvf mecab-0.996-ko-0.9.2.tar.gz
+cd /opt/mecab-0.996-ko-0.9.2
+./configure
+make
+make check
+make install
+ldconfig
+
+사전 파일 설치
 wget https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-2.1.1-20180720.tar.gz
 tar xvfz mecab-ko-dic-2.1.1-20180720.tar.gz
 cd mecab-ko-dic-2.1.1-20180720

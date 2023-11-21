@@ -4,7 +4,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TrainingArguments
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTTrainer
-from gensim.models import Word2Vec
+
 
 
 use_flash_attention = False
@@ -48,7 +48,12 @@ model.config.pretraining_tp = 1
 # tokenizer.pad_token = tokenizer.eos_token
 # tokenizer.padding_side = "right"
 
-tokenizer = Word2Vec.load("./out/tokenizer/word2vec_model.model")
+# print(tokenizer)
+
+#tokenizer를 가져올때 상대경로가 아닌 절대경로로 해야 잘된다
+tokenizer = AutoTokenizer.from_pretrained("/prj/src/out/berttoken/")
+tokenizer.pad_token = tokenizer.eos_token
+tokenizer.padding_side = "right"
 
 
 peft_config = LoraConfig(
