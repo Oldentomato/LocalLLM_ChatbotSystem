@@ -5,6 +5,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTrainer
 
+
 use_flash_attention = False
 
 dataset = load_dataset("royboy0416/ko-alpaca", split="train")

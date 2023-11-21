@@ -18,8 +18,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.retrievers.document_compressors import EmbeddingsFilter
 from langchain.retrievers import ContextualCompressionRetriever
+import config
 
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = config.OPENAI_API_KEY
 
 # 라마, gpt3.5, gpt4 중 택 1 옵션 넣기 < 해결
 # 여러 pdf문서 넣을 수 있게 하기(프레스바 넣기)
