@@ -1,14 +1,14 @@
-from darasets import load_dataset
+from datasets import load_dataset
 from random import randrange
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TrainingArguments
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
-from trl import SFTrainer
+from trl import SFTTrainer
 
 
 use_flash_attention = False
 
-dataset = load_dataset("royboy0416/ko-alpaca", split="train")
+dataset = load_dataset("databricks/databricks-dolly-15k", split="train")
 
 print(f"dataset size: {len(dataset)}")
 print(dataset[randrange(len(dataset))])
@@ -86,14 +86,14 @@ model = get_peft_model(model, peft_config)
 
 max_seq_length = 2048
 
-trainer = SFTrainer(
+trainer = SFTTrainer(
     model=model,
     train_dataset=dataset,
     peft_config=peft_config,
     max_seq_length=max_seq_length,
     tokenizer=tokenizer,
     packing=True,
-    formatting_fuc=format_instruction,
+    formatting_func=format_instruction,
     args=args
 )
 
