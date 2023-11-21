@@ -4,21 +4,22 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TrainingArguments
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTTrainer
+from gensim.models import Word2Vec
 
 
 use_flash_attention = False
-
-dataset = load_dataset("databricks/databricks-dolly-15k", split="train")
+#databricks/databricks-dolly-15k
+dataset = load_dataset("royboy0416/ko-alpaca", split="train")
 
 print(f"dataset size: {len(dataset)}")
 print(dataset[randrange(len(dataset))])
 
 def format_instruction(sample):
     return f"""### Instruction:
-    Use the Input below to create an instruction, which could have been used to generate the input using an LLM. 
+    아래 input으로 LLM을 사용하여 입력을 생성하는 데 사용될 수 있는 명령을 생성하십시오.
 
-    ### Input:
-    {sample['response']}
+    ### input:
+    {sample['output']}
 
     ### Response:
     {sample['instruction']}
@@ -43,9 +44,12 @@ model = AutoModelForCausalLM.from_pretrained(
 model.config.pretraining_tp = 1
 
 #이 부분을 로컬 토크나이저로 변경할 것
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-tokenizer.pad_token = tokenizer.eos_token
-tokenizer.padding_side = "right"
+# tokenizer = AutoTokenizer.from_pretrained(model_id)
+# tokenizer.pad_token = tokenizer.eos_token
+# tokenizer.padding_side = "right"
+
+tokenizer = Word2Vec.load("./out/tokenizer/word2vec_model.model")
+
 
 peft_config = LoraConfig(
     lora_alpha = 16,

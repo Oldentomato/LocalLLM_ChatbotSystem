@@ -10,3 +10,4 @@ konlpy
 JPype1
 nltk
 gensim
+matplotlib

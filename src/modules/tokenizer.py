@@ -2,7 +2,7 @@
 wget https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-2.1.1-20180720.tar.gz
 tar xvfz mecab-ko-dic-2.1.1-20180720.tar.gz
 cd mecab-ko-dic-2.1.1-20180720
-./configure
+./configure --with-mecab-config=/opt/mecab-0.996-ko-0.9.2/mecab-config
 make
 make install
 
@@ -10,8 +10,8 @@ make install
 curl -s https://raw.githubusercontent.com/konlpy/konlpy/master/scripts/mecab.sh
 pip install mecab-python
 pip install nltk
+pip install konlpy
 pip install gensim
-pip install torchtext
 '''
 from konlpy.tag import Mecab
 import urllib.request
@@ -20,15 +20,21 @@ from nltk import FreqDist
 import numpy as np
 import matplotlib.pyplot as plt
 from gensim.models import Word2Vec
+from transformers import LlamaTokenizer
 
 urllib.request.urlretrieve("https://raw.githubusercontent.com/e9t/nsmc/master/ratings.txt", filename="ratings.txt")
 data = pd.read_table('ratings.txt')
 #debug
-data[:10]
+# print(data.iloc[46471])
 
 #한글과 공백을 제외하고 모두 제거
-data['document'] = data['document'].str.replace("[^ㄱ-ㅎㅏ-ㅣ가-힣 ]","")
+data['document'] = data['document'].str.replace("[^ㄱ-ㅎㅏ-ㅣ가-힣 ]","", regex=True)
+data = data.replace('', pd.NA)
 
+#결측치 제거
+data = data.dropna(axis=0)
+
+print(len(data['document']))
 #불용어 정의
 stopwords=['의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다']
 
@@ -72,15 +78,18 @@ max_len = max(len(l) for l in encoded)
 print(f'문장의 최대 길이 : {max_len}')
 print(f'문장의 최소 길이 : {min(len(l) for l in encoded)}')
 print(f'문장의 평균 길이 : {sum(map(len, encoded))/len(encoded)}')
-plt.hist([len(s) for s in encoded], bins=50)
-plt.xlabel('length of sample')
-plt.ylabel('number of sample')
-plt.show()
 
-#모든 문장의 길이를 63으로 통일
+
+# plt.hist([len(s) for s in encoded], bins=50)
+# plt.xlabel('length of sample')
+# plt.ylabel('number of sample')
+# plt.show()
+
+
 for line in encoded:
-    if len(line) < max_len: #현재 샘플이 정해준 길이보다 짧으면
-        line += [word_to_index['pad'] * (max_len - len(line))] #나머지는 전부 pad 토큰으로 채운다
+    if len(line) < max_len:
+        line += [word_to_index['pad']] * (max_len - len(line))
+
 
 print(f'문장의 최대 길이 : {max(len(l) for l in encoded)}')
 print(f'문장의 최소 길이 : {min(len(l) for l in encoded)}')
@@ -88,7 +97,7 @@ print(f'문장의 평균 길이 : {sum(map(len, encoded))/len(encoded)}')
 
 
 #Word2Vec으로 벡터화
-model = Word2Vec(sentences = tokenized, size = 100, window = 5, min_count = 5, workers = 4, sg = 0)
+model = Word2Vec(sentences = tokenized, vector_size = 100, window = 5, min_count = 5, workers = 4, sg = 0)
 '''
     size = 워드 벡터의 특징 값, 임베딩된 벡터의 차원
     window = 컨텍스트 윈도우 크기
@@ -100,5 +109,5 @@ model = Word2Vec(sentences = tokenized, size = 100, window = 5, min_count = 5, w
 #debug
 model.wv.vectors.shape
 
-model.save(".out/tokenizer/word2vec_model.model")
+model.save("../out/tokenizer/word2vec_model.model")
 
