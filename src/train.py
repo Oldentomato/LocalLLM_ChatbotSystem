@@ -29,10 +29,10 @@ def format_instruction(sample):
     아래 input으로 LLM을 사용하여 입력을 생성하는 데 사용될 수 있는 명령을 생성하십시오.
 
     ### input:
-    {sample['output']}
+    {sample['instruction']}
 
     ### Response:
-    {sample['instruction']}
+    {sample['output']}
     """
 
 print(format_instruction(dataset[randrange(len(dataset))]))
@@ -66,6 +66,8 @@ tokenizer.pad_token_id = 0
 tokenizer.eos_token_id = 1
 tokenizer.padding_side = "right"
 
+print(f"tokeinzer size: {len(tokenizer)}")
+model.resize_token_embeddings(len(tokenizer))
 
 peft_config = LoraConfig(
     lora_alpha = 16,
