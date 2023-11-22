@@ -8,7 +8,7 @@ import os
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCauslaLM, AutoTokenizer
-from .peft2hf import HuggingFaceHugs
+# from .peft2hf import HuggingFaceHugs
 
 from langchain import PromptTemplate, LLMChain
 
@@ -59,12 +59,10 @@ m = AutoModelForCauslaLM.from_pretrained(
 m = PeftModel.from_pretrained(m, adapter_path)
 m = m.merge_and_unload()
 
-tokenizer = AutoTokenizer.from_pretrained("/prj/src/out/sentencebpetoken/")
-tokenizer.pad_token_id = 0
-tokenizer.eos_token_id = 1
-tokenizer.padding_side = "right"
+m.save_pretrained("../out/peft_hf") #여기서 모델만 잘 저장된다면 아래들은 문제없음
 
-hf_model = HuggingFaceHugs(model=m, tokenizer=tokenizer)
+
+# hf_model = HuggingFaceHugs(model=m, tokenizer=tokenizer)
 
 stream_handler = StreamHandler()
 
