@@ -18,9 +18,11 @@ print(dataset[randrange(len(dataset))])
 #train tokenizer
 #transformers: "../out/bertvocab/vocab.json"
 #bert: '../out/bertvocab/vocab.txt'
-custom_token = Custom_Tokenizer(vocab_dir="sentencevocab/test.json", token_dir="sentencetoken/",
+custom_token = Custom_Tokenizer(vocab_dir="sentencebpevocab/test.json", token_dir="sentencebpetoken/",
                                 vocab_file_name="prepare.mecab.txt", raw_data_url="https://raw.githubusercontent.com/e9t/nsmc/master/ratings.txt",
-                                save_raw_name="ratings.txt", model_name="sentence")
+                                save_raw_name="ratings.txt", model_name="sentencebpe")
+
+custom_token.run()
 
 def format_instruction(sample):
     return f"""### Instruction:
@@ -59,8 +61,9 @@ model.config.pretraining_tp = 1
 # print(tokenizer)
 
 #tokenizer를 가져올때 상대경로가 아닌 절대경로로 해야 잘된다
-tokenizer = AutoTokenizer.from_pretrained("/prj/src/out/berttoken/")
-tokenizer.pad_token = tokenizer.eos_token
+tokenizer = AutoTokenizer.from_pretrained("/prj/src/out/sentencebpetoken/")
+tokenizer.pad_token_id = 0
+tokenizer.eos_token_id = 1
 tokenizer.padding_side = "right"
 
 

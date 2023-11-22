@@ -12,3 +12,4 @@ nltk
 gensim
 matplotlib
 sentencepiece
+streamlit

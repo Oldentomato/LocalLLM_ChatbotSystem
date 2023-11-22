@@ -1,37 +1,41 @@
 from konlpy.tag import Mecab
 import urllib.request
 import pandas as pd
-from tokenizers import BertWordPieceTokenizer, CharBPETokenizer
+from tokenizers import BertWordPieceTokenizer, CharBPETokenizer, SentencePieceBPETokenizer
 from transformers import BertTokenizer, PreTrainedTokenizerFast
 import sentencepiece as spm
 import os
 
 class Custom_Tokenizer:
     def __init__(self, vocab_dir, token_dir, vocab_file_name, raw_data_url, save_raw_name, model_name):
-        self.vocab_dir = f"..out/{vocab_dir}"
-        self.token_dir = f"..out/{token_dir}"
-        self.vocab_file_name = f"../out/{vocab_file_name}"
+        self.vocab_dir = f"./out/{vocab_dir}"
+        self.token_dir = f"./out/{token_dir}"
+        self.vocab_file_name = f"./out/{vocab_file_name}"
         self.raw_data_url = raw_data_url
         self.save_raw_name = save_raw_name
         self.model_name = model_name
 
     def __check(self):
-        if len(os.listdir(f"../out/{self.token_dir}")) > 0:
+        if len(os.listdir(self.token_dir)) > 0:
             return True
         else:
             return False
 
     def __model_save(self, tokenizer):
-        tokenizer.save(self.vocab_dir)
+        if tokenizer != None:
+            tokenizer.save(self.vocab_dir)
 
-        if self.model_name == "transformers":
-            #transformers형태로 저장
-            tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.vocab_dir)
-            tokenizer.save_pretrained(self.token_dir)
-        elif self.model_name == "bert":
-            #bert transformers형태로 저장
-            bert_token = BertTokenizer(self.vocab_dir)
-            bert_token.save_pretrained(self.token_dir)
+            if self.model_name == "transformers":
+                #transformers형태로 저장
+                tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.vocab_dir)
+                tokenizer.save_pretrained(self.token_dir)
+            elif self.model_name == "bert":
+                #bert transformers형태로 저장
+                bert_token = BertTokenizer(self.vocab_dir)
+                bert_token.save_pretrained(self.token_dir)
+            elif self.model_name == "sentencebpe":
+                tokenizer = PreTrainedTokenizerFast(tokenizer_file=self.vocab_dir)
+                tokenizer.save_pretrained(self.token_dir)
 
     def __Set_Bert(self):
         tokenizer = BertWordPieceTokenizer()
@@ -49,6 +53,8 @@ class Custom_Tokenizer:
             min_frequency=min_frequency
         )
 
+        return tokenizer
+
     def __Set_BPET(self):
 
         vocab_size = 30000
@@ -60,14 +66,35 @@ class Custom_Tokenizer:
             vocab_size=vocab_size,
             special_tokens = special_tokens
         )
+        return tokenizer
 
     def __Set_Word2Vec(self):
         pass
 
-    def __Set_SentencePiece(self):
+    def __Set_SentenceBPEPiece(self):
         vocab_size = 30000
-        model_type= "bpe"
-        spm.SentencePieceTrainer.Train('--input=$self.vocab_dir --model_prefix=$self.token_dir --vocab_size=$vocab_size --model_type=$model_type')
+        limit_alphabet = 6000
+        min_frequency = 5
+        # spm.SentencePieceTrainer.Train('--input=./out/prepare.mecab.txt --model_prefix=./out/sentencetoken --vocab_size=30000 --model_type=bpe')
+        # special_tokens={'bos_token': '<s>', 'eos_token': '</s>', 'unk_token': '<unk>', 'pad_token': '</s>'}
+        special_tokens = ["<s>", "<pad>", "</s>", "<unk>", "<cls>", "<sep>", "<mask>"]
+        tokenizer = SentencePieceBPETokenizer()
+        tokenizer.train(
+            self.vocab_file_name,
+            vocab_size=vocab_size,
+            min_frequency=min_frequency,
+            show_progress=True,
+            special_tokens=special_tokens
+        )
+
+        return tokenizer
+
+
+    def __Set_SentencePiece(self):
+        spm.SentencePieceTrainer.Train('--input=./out/prepare.mecab.txt --model_prefix=./out/sentencetoken/sentencetoken --vocab_size=30000 --model_type=bpe --max_sentence_length=9999')
+        return None
+
+
 
     def __Data_Preprocessing(self):
         print("get raw data and preprocessing")
@@ -95,13 +122,15 @@ class Custom_Tokenizer:
             print("tokenizer file is not detected \n generating...")
             self.__Data_Preprocessing()
             if self.model_name == "bert":
-                self.__Set_Bert()
+                tokenizer = self.__Set_Bert()
             elif self.model_name == "bert":
-                self.__Set_BPET()
+                tokenizer = self.__Set_BPET()
+            elif self.model_name == "sentencebpe":
+                tokenizer = self.__Set_SentenceBPEPiece()
             elif self.model_name == "sentence":
-                self.__Set_SentencePiece()
+                tokenizer = self.__Set_SentencePiece()
 
-            self.__model_save()
+            self.__model_save(tokenizer)
 
 
 
