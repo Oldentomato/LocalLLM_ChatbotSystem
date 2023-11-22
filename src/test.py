@@ -1,9 +1,9 @@
-from transformers import BertTokenizer
+from modules import Custom_Tokenizer
 
 
-tokenizer = BertTokenizer.from_pretrained("/prj/src/out/berttoken/", local_files_only=True)
-tokenizer.pad_token = tokenizer.eos_token
-tokenizer.padding_side = "right"
-encoded = tokenizer.encode("왜이렇게 잘 안되는거야")
+custom_token = Custom_Tokenizer(vocab_dir="sentencevocab/test.json", token_dir="sentencetoken/",
+                                vocab_file_name="prepare.mecab.txt", raw_data_url="https://raw.githubusercontent.com/e9t/nsmc/master/ratings.txt",
+                                save_raw_name="ratings.txt", model_name="sentence")
 
-print(encoded)
+
+custom_token.run()

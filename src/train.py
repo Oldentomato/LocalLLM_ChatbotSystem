@@ -4,6 +4,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TrainingArguments
 from peft import LoraConfig, prepare_model_for_kbit_training, get_peft_model
 from trl import SFTTrainer
+from modules import Custom_Tokenizer
 
 
 
@@ -13,6 +14,13 @@ dataset = load_dataset("royboy0416/ko-alpaca", split="train")
 
 print(f"dataset size: {len(dataset)}")
 print(dataset[randrange(len(dataset))])
+
+#train tokenizer
+#transformers: "../out/bertvocab/vocab.json"
+#bert: '../out/bertvocab/vocab.txt'
+custom_token = Custom_Tokenizer(vocab_dir="sentencevocab/test.json", token_dir="sentencetoken/",
+                                vocab_file_name="prepare.mecab.txt", raw_data_url="https://raw.githubusercontent.com/e9t/nsmc/master/ratings.txt",
+                                save_raw_name="ratings.txt", model_name="sentence")
 
 def format_instruction(sample):
     return f"""### Instruction:

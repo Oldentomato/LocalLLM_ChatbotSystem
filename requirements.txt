@@ -11,3 +11,4 @@ JPype1
 nltk
 gensim
 matplotlib
+sentencepiece
