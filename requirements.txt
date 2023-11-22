@@ -13,3 +13,4 @@ gensim
 matplotlib
 sentencepiece
 streamlit
+llama-index
