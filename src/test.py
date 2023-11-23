@@ -6,7 +6,7 @@ from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
 import torch
-from peft import PeftModel
+from peft import PeftModelForCausalLM, get_peft_config
 from transformers import AutoModelForCauslaLM, AutoTokenizer
 # from .peft2hf import HuggingFaceHugs
 
@@ -56,7 +56,7 @@ m = AutoModelForCauslaLM.from_pretrained(
     torch_dtype=torch.bfloat16,
     device_map={"": 0}
 )
-m = PeftModel.from_pretrained(m, adapter_path)
+m = PeftModelForCausalLM.from_pretrained(m, adapter_path)
 m = m.merge_and_unload()
 
 m.save_pretrained("../out/peft_hf") #여기서 모델만 잘 저장된다면 아래들은 문제없음
