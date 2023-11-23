@@ -14,3 +14,7 @@ matplotlib
 sentencepiece
 streamlit
 llama-index
+langchain
+sentence-transformers
+pypdf
+chromadb
