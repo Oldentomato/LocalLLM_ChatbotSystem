@@ -18,3 +18,5 @@ langchain
 sentence-transformers
 pypdf
 chromadb
+streamlit
+streamlit_chat
