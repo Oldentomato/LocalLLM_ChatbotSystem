@@ -77,7 +77,7 @@ tok.bos_token_id = 1
 hf_model = HuggingFacePipeline.from_model_id(
     model,
     task="text-generation",
-    model_kwargs={"temperature":1, "max_length":4096, "torch_dtype":torch.float16},
+    model_kwargs={"temperature":0.1, "max_length":64, "torch_dtype":torch.float16},
     device=0
 )
 
