@@ -1,5 +1,5 @@
 class TextStreamer:
-    def __init__(self, tokenizer: "AutoTokenizer", skip_prompt: bool = False, **decode_kwargs):
+    def __init__(self,g, tokenizer: "AutoTokenizer", skip_prompt: bool = False, **decode_kwargs):
         self.tokenizer = tokenizer
         self.skip_prompt = skip_prompt
         self.decode_kwargs = decode_kwargs
@@ -8,6 +8,7 @@ class TextStreamer:
         self.token_cache = []
         self.print_len = 0
         self.next_tokens_are_prompt = True
+        self.gen = g
 
     def put(self, value):
         """
@@ -59,7 +60,8 @@ class TextStreamer:
 
     def on_finalized_text(self, text: str, stream_end: bool = False):
         """Prints the new text to stdout. If the stream is ending, also prints a newline."""
-        print(f">>{text}", flush=True, end="" if not stream_end else None)
+        print(f"{text}", flush=True, end="" if not stream_end else None)
+        self.gen.send(text)
 
     def _is_chinese_char(self, cp):
         """Checks whether CP is the codepoint of a CJK character."""

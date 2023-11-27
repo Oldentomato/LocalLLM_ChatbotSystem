@@ -15,30 +15,27 @@ from langchain.prompts import PromptTemplate
 from .custom.textstreamer import TextStreamer
 import tempfile
 
-
+#"beomi/llama-2-ko-7b"
+#"/prj/src/data/7b-hf"
 class Set_LocalModel:
     def __init__(self):
-        self.model = "/prj/src/data/7b-hf"
+        self.model = "beomi/llama-2-ko-7b"
 
 
 
     def get_llm_model(self):
         
         print("model load")
-        pre_model = AutoModelForCausalLM.from_pretrained(
+        self.pre_model = AutoModelForCausalLM.from_pretrained(
         self.model,
         device_map="auto",
         load_in_8bit=True,
         trust_remote_code=True
         )
-        tokenizer = LlamaTokenizerFast.from_pretrained(self.model)
 
-        streamer = TextStreamer(tokenizer, skip_prompt=True)
+        self.tokenizer = LlamaTokenizerFast.from_pretrained(self.model)
 
-        pipe = pipeline(
-            "text-generation", model=pre_model, tokenizer=tokenizer, max_new_tokens=200, streamer=streamer
-        )
-        hf_model = HuggingFacePipeline(pipeline=pipe)
+
 
     def get_embedding_model(self):
 
@@ -76,36 +73,55 @@ class Set_LocalModel:
             return texts
 
 
-        pages = read_pdfs(pdf_files)
-        texts = split_pages(pages)
+        try:
+            pages = read_pdfs(pdf_files)
+            texts = split_pages(pages)
 
-        persist_directory = "/prj/src/data_store" 
-        print("pdf embedding")
-        db = Chroma.from_documents( #chromadb 임베딩된 텍스트 데이터들을 효율적으로 저장하기위한 모듈
-            documents=texts,
-            embedding=self.embeddings,
-            persist_directory=persist_directory)
+            persist_directory = "/prj/src/data_store" 
+            print("pdf embedding")
+            db = Chroma.from_documents( #chromadb 임베딩된 텍스트 데이터들을 효율적으로 저장하기위한 모듈
+                documents=texts,
+                embedding=self.embeddings,
+                persist_directory=persist_directory)
 
-        print("pdf embedd and saved")
-
-
-
-
-    def run_QA(self, question, mode, model):
-        db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
-        db.get() 
-
-        # Set retriever and LLM
-        retriever = db.as_retriever(search_kwargs={"k": 2})
-        print("qa_chain load")
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=self.hf_model,
-            chain_type="stuff",
-            retriever=retriever,
-            return_source_documents=True)
+            print("pdf embedd and saved")
+            return True, None
+        except Exception e:
+            print("error to embedding")
+            return False, e
 
 
 
-        qa_chain(question)
+
+    def run_QA(self, g, question):
+        try:
+            db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
+            db.get() 
+
+            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True)
+
+            pipe = pipeline(
+                "text-generation", model=self.pre_model, tokenizer=self.tokenizer, max_new_tokens=400, streamer=streamer
+            )
+            hf_model = HuggingFacePipeline(pipeline=pipe)
+
+            # Set retriever and LLM
+            retriever = db.as_retriever(search_kwargs={"k": 2})
+            print("qa_chain load")
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=hf_model,
+                chain_type="stuff",
+                retriever=retriever,
+                return_source_documents=True)
+
+
+            qa_chain(question)
+
+
+        except Exception as e:
+            print('Failed:'+str(e))
+        finally:
+            g.close()
+
 
     

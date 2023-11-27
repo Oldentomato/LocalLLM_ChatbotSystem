@@ -35,6 +35,7 @@ pdf_files = st.file_uploader("PDF 파일을 올려주세요!", accept_multiple_f
 st.write("---")
 chat = modules.Chat_UI(is_debugging=False)#채팅 모듈
 local_model = modules.Set_LocalModel()
+model = None
 
 select_model = st.radio(
     "Select to Mode",
@@ -46,8 +47,10 @@ st.write("You selected:", select_model)
 
 
 def Answer_Bot():
+    with st.spinner("모델 로드중"):
+        model = local_model.get_llm_model()
     user_input = chat.on_input_change()
-
+    local_model.run_QA(user_input,None,model)
 
 # self.hf_model , self.embeddings에서 return으로 나오도록 바꾸고
 # 해당 변수의 값이 할당되어있는지 확인하고 안되어있으면 모델로드하도록 변경
@@ -56,11 +59,9 @@ if select_model == "Search":
     # Question
     st.header("KnowBot!!")
 
-    
     chat.display_chat()
     with st.container():
-        with st.spinner("모델 로드중"):
-            local_model.get_llm_model()
+        
         st.text_input("User Input:", on_change=Answer_Bot, key="user_input")
 
 elif select_model == "Embedding_PDF":
