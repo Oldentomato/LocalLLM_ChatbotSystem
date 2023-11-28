@@ -8,7 +8,7 @@ import torch
 from peft import PeftModelForCausalLM, get_peft_config
 from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline
 from langchain import HuggingFacePipeline
-from langchain.chains import LLMChain
+from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 from .custom.textstreamer import TextStreamer
 import tempfile
@@ -72,7 +72,9 @@ class Set_LocalModel:
 
 
         try:
+            print("read_pdfs")
             pages = read_pdfs(pdf_files)
+            print("split_pdfs")
             texts = split_pages(pages)
 
             persist_directory = "/prj/src/data_store" 
@@ -86,6 +88,7 @@ class Set_LocalModel:
             return True, None
         except Exception as e:
             print("error to embedding")
+            print(f"error_msg: {e}")
             return False, e
 
 
@@ -95,14 +98,15 @@ class Set_LocalModel:
         You should be friendly, but not overly chatty. Context information is below. Given the context information and not prior knowledge, answer the query.
         If you don't know the answer, just say that you don't know, don't try to make up an answer.
         Below are the chats of history of the user:\n 
+        {context}
         <hs>
-        {history}
+        {chat_history}
         </hs>
-        Question: {query}
+        Question: {question}
         Answer: """
 
         PROMPT = PromptTemplate(
-        template=prompt_template, input_variables=["history", "query"]
+        template=prompt_template, input_variables=["chat_history", "question", "context"]
         )
 
         return PROMPT
@@ -116,28 +120,26 @@ class Set_LocalModel:
             streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True)
 
             pipe = pipeline(
-                "text-generation", model=self.pre_model, tokenizer=self.tokenizer, max_new_tokens=400, streamer=streamer
+                "text-generation", model=self.pre_model, tokenizer=self.tokenizer, max_new_tokens=800, streamer=streamer
             )
             hf_model = HuggingFacePipeline(pipeline=pipe)
 
-            memory = ConversationBufferMemory(memory_key="history", input_key="query", output_key="answer", return_messages=True)
+            memory = ConversationBufferMemory(memory_key="chat_history", input_key="question", output_key="answer", return_messages=True)
 
             # Set retriever and LLM
             retriever = db.as_retriever(search_kwargs={"k": 2})
             print("qa_chain load")
-            qa_chain = RetrievalQA.from_chain_type(
+            qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=hf_model,
                 chain_type="stuff",
                 retriever=retriever,
                 return_source_documents=True,
-                chain_type_kwargs={
-                    "verbose": True,
-                    "prompt": self.__set_prompt(),
-                    "memory": memory
-                })
+                memory=memory,
+                combine_docs_chain_kwargs={"prompt":self.__set_prompt()}
+                )
 
 
-            qa_chain({"query":question})
+            qa_chain({"question":question})
 
 
         except Exception as e:

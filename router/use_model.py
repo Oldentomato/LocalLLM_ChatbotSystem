@@ -45,7 +45,12 @@ def chat_llama(query):
 
 @usemodel.post("/pdfembedding")
 async def llamaquery(pdfs: List[UploadFile]):
-    success,e = local_model.pdf_embedding(pdfs)
+    files = []
+    for pdf in pdfs:
+        with open("./upload/"+pdf.filename, "wb") as f:
+            f.write(pdf.file.read())
+        files.append("./upload"+pdf.filename)
+    success,e = local_model.pdf_embedding(files)
     return {"success":success, "error": e}
 
 @usemodel.post("/llamaquery")
