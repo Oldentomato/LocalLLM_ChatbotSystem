@@ -1,19 +1,19 @@
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.document_loaders import PyPDFLoader
-from langchain.callbacks.base import BaseCallbackHandler
 from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
 import torch
 from peft import PeftModelForCausalLM, get_peft_config
-from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaTokenizerFast, pipeline
+from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline
 from langchain import HuggingFacePipeline
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from .custom.textstreamer import TextStreamer
 import tempfile
+from langchain.memory import ConversationBufferMemory
+
 
 #"beomi/llama-2-ko-7b"
 #"/prj/src/data/7b-hf"
@@ -38,8 +38,6 @@ class Set_LocalModel:
 
 
     def get_embedding_model(self):
-
-
         print("embedding model load")
         model_kwargs = {'device': 'cuda'}
         encode_kwargs = {'normalize_embeddings': True}
@@ -86,11 +84,28 @@ class Set_LocalModel:
 
             print("pdf embedd and saved")
             return True, None
-        except Exception e:
+        except Exception as e:
             print("error to embedding")
             return False, e
 
 
+    def __set_prompt(self):
+        prompt_template = """You are a Chat support agent.
+        Use the following user related the chat history (delimited by <hs></hs>) to answer the question at the end:
+        You should be friendly, but not overly chatty. Context information is below. Given the context information and not prior knowledge, answer the query.
+        If you don't know the answer, just say that you don't know, don't try to make up an answer.
+        Below are the chats of history of the user:\n 
+        <hs>
+        {history}
+        </hs>
+        Question: {query}
+        Answer: """
+
+        PROMPT = PromptTemplate(
+        template=prompt_template, input_variables=["history", "query"]
+        )
+
+        return PROMPT
 
 
     def run_QA(self, g, question):
@@ -105,6 +120,8 @@ class Set_LocalModel:
             )
             hf_model = HuggingFacePipeline(pipeline=pipe)
 
+            memory = ConversationBufferMemory(memory_key="history", input_key="query", output_key="answer", return_messages=True)
+
             # Set retriever and LLM
             retriever = db.as_retriever(search_kwargs={"k": 2})
             print("qa_chain load")
@@ -112,10 +129,15 @@ class Set_LocalModel:
                 llm=hf_model,
                 chain_type="stuff",
                 retriever=retriever,
-                return_source_documents=True)
+                return_source_documents=True,
+                chain_type_kwargs={
+                    "verbose": True,
+                    "prompt": self.__set_prompt(),
+                    "memory": memory
+                })
 
 
-            qa_chain(question)
+            qa_chain({"query":question})
 
 
         except Exception as e:

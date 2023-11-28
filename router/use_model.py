@@ -6,6 +6,7 @@ import queue
 from pydantic import BaseModel
 from fastapi import Form
 from src.modules import Set_LocalModel
+from typing import List
 
 usemodel = APIRouter()
 local_model = Set_LocalModel()
@@ -43,8 +44,8 @@ def chat_llama(query):
 
 
 @usemodel.post("/pdfembedding")
-async def llamaquery(pdf: UploadFile):
-    success,e = local_model.pdf_embedding(pdf)
+async def llamaquery(pdfs: List[UploadFile]):
+    success,e = local_model.pdf_embedding(pdfs)
     return {"success":success, "error": e}
 
 @usemodel.post("/llamaquery")
