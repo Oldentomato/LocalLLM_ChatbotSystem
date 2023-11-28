@@ -49,7 +49,7 @@ async def llamaquery(pdfs: List[UploadFile]):
     for pdf in pdfs:
         with open("./upload/"+pdf.filename, "wb") as f:
             f.write(pdf.file.read())
-        files.append("./upload"+pdf.filename)
+        files.append("./upload/"+pdf.filename)
     success,e = local_model.pdf_embedding(files)
     return {"success":success, "error": e}
 
