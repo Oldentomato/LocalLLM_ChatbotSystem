@@ -1,12 +1,9 @@
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.chains import RetrievalQA
 from langchain.document_loaders import PyPDFLoader
 from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
-import torch
-from peft import PeftModelForCausalLM, get_peft_config
-from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline
+from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline, AutoModel, AutoTokenizer
 from langchain import HuggingFacePipeline
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
@@ -19,7 +16,7 @@ from langchain.memory import ConversationBufferMemory
 #"/prj/src/data/7b-hf"
 class Set_LocalModel:
     def __init__(self):
-        self.model = "beomi/llama-2-ko-7b"
+        self.model = "local:./out/eval"
 
 
 
@@ -48,15 +45,15 @@ class Set_LocalModel:
 
     def pdf_embedding(self, pdf_files):
         def read_pdfs(pdf_files):
-            with tempfile.TemporaryDirectory() as temp_dir:
-                pages = []
-                for file in pdf_files:
-                    temp_filepath = os.path.join(temp_dir, file.name)
-                    with open(temp_filepath, "wb") as f:
-                        f.write(file.getvalue())
-                    loader = PyPDFLoader(temp_filepath)
-                    for page in loader.load_and_split():
-                        pages.append(page)
+            if not pdf_files:
+                return []
+            
+            pages = []
+            for path in pdf_files:
+                loader = PyPDFLoader(path)
+                for page in loader.load_and_split():
+                    pages.append(page)
+
             return pages
 
 
