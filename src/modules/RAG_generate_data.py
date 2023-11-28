@@ -67,7 +67,7 @@ def generate_queries(
     Automatically generate hypothetical questions that could be answered with
     doc in the corpus.
     """
-    llm = OpenAI(model='gpt-3.5-turbo', api_key='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')
+    llm = OpenAI(model='gpt-3.5-turbo', api_key='API-KEY')
 
     prompt_template = prompt_template or """\
     Context information is below.
