@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader
 import re
 
 # define model
-model_id = "BAAI/bge-small-en"
+#"BAAI/bge-small-en"
+model_id = "BM-K/KoSimCSE-roberta"
 model = SentenceTransformer(model_id)
 
 TRAIN_DATASET_FPATH = '../data/train_dataset.json'
@@ -15,10 +16,10 @@ VAL_DATASET_FPATH = '../data/val_dataset.json'
 # This should typically be much larger. 
 BATCH_SIZE = 10
 
-with open(TRAIN_DATASET_FPATH, 'r+') as f:
+with open(TRAIN_DATASET_FPATH, 'r+', encoding='utf-8') as f:
     train_dataset = json.load(f)
 
-with open(VAL_DATASET_FPATH, 'r+') as f:
+with open(VAL_DATASET_FPATH, 'r+', encoding='utf-8') as f:
     val_dataset = json.load(f)
 
 dataset = train_dataset
@@ -50,7 +51,7 @@ relevant_docs = dataset['relevant_docs']
 
 evaluator = InformationRetrievalEvaluator(queries, corpus, relevant_docs)
 
-EPOCHS = 2
+EPOCHS = 10
 
 warmup_steps = int(len(loader) * EPOCHS * 0.1)
 

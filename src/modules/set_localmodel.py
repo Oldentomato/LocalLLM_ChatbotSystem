@@ -3,7 +3,7 @@ from langchain.document_loaders import PyPDFLoader
 from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
-from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline, AutoModel, AutoTokenizer
+from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline, RobertaForCausalLM, AutoTokenizer
 from langchain import HuggingFacePipeline
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
@@ -11,18 +11,21 @@ from .custom.textstreamer import TextStreamer
 import tempfile
 from langchain.memory import ConversationBufferMemory
 
-
 #"beomi/llama-2-ko-7b"
 #"/prj/src/data/7b-hf"
+#"jhgan/ko-sroberta-multitask"
+#"/prj/out/exp_finetune"
+
 class Set_LocalModel:
     def __init__(self):
-        self.model = "local:./out/eval"
+        self.model = "/prj/src/data/7b-hf"
+        self.embedd_model = "/prj/out/exp_finetune"
 
 
 
     def get_llm_model(self):
-        
         print("model load")
+        # self.pre_model = RobertaForCausalLM.from_pretrained(self.model, is_decoder=True)
         self.pre_model = AutoModelForCausalLM.from_pretrained(
         self.model,
         device_map="auto",
@@ -31,6 +34,7 @@ class Set_LocalModel:
         )
 
         self.tokenizer = LlamaTokenizerFast.from_pretrained(self.model)
+        # self.tokenizer = AutoTokenizer.from_pretrained(self.model)
 
 
 
@@ -39,8 +43,9 @@ class Set_LocalModel:
         model_kwargs = {'device': 'cuda'}
         encode_kwargs = {'normalize_embeddings': True}
 
-        self.embeddings = HuggingFaceEmbeddings(cache_folder = "/prj/src/cache", model_name=self.model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
+        self.embeddings = HuggingFaceEmbeddings(cache_folder = "/prj/src/cache", model_name=self.embedd_model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
         self.embeddings.client.tokenizer.pad_token = self.embeddings.client.tokenizer.eos_token
+
 
 
     def pdf_embedding(self, pdf_files):
@@ -90,17 +95,20 @@ class Set_LocalModel:
 
 
     def __set_prompt(self):
-        prompt_template = """You are a Chat support agent.
-        Use the following user related the chat history (delimited by <hs></hs>) to answer the question at the end:
-        You should be friendly, but not overly chatty. Context information is below. Given the context information and not prior knowledge, answer the query.
-        If you don't know the answer, just say that you don't know, don't try to make up an answer.
-        Below are the chats of history of the user:\n 
+        prompt_template = """당신은 채팅 지원 에이전트입니다.
+        채팅 기록과 관련된 다음 사용자(<hs></hs>로 구분)를 사용하여 마지막에 질문에 답합니다.
+        친근하게 대답해도 되지만 지나치게 수다를 떨면 안 됩니다. 상황 정보는 아래에 있습니다.(<cx></cx>로 구분) 사전 지식이 아닌 상황 정보가 주어지면 질문에 답하십시오.
+        답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.
+        문장이 끝날 때마다 "가나다"를 입력하세요.
+        아래는 사용자의 기록에 대한 대화입니다.\n 
+        <cx>
         {context}
+        </cx>
         <hs>
         {chat_history}
         </hs>
-        Question: {question}
-        Answer: """
+        질문: {question}
+        답변: """
 
         PROMPT = PromptTemplate(
         template=prompt_template, input_variables=["chat_history", "question", "context"]
@@ -117,7 +125,7 @@ class Set_LocalModel:
             streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True)
 
             pipe = pipeline(
-                "text-generation", model=self.pre_model, tokenizer=self.tokenizer, max_new_tokens=800, streamer=streamer
+                "text-generation", model=self.pre_model, tokenizer=self.tokenizer, max_new_tokens=400, streamer=streamer
             )
             hf_model = HuggingFacePipeline(pipeline=pipe)
 

@@ -10,8 +10,10 @@ from llama_index.llms import OpenAI
 from llama_index.schema import MetadataMode
 from tqdm.notebook import tqdm
 
-TRAIN_FILES = ['../data/train.pdf']
-VAL_FILES = ['../data/val.pdf']
+API_KEY = "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"
+
+TRAIN_FILES = ['../data/SAMPLE.pdf']
+VAL_FILES = ['../data/SAMPLE.pdf']
 
 TRAIN_CORPUS_FPATH = '../data/train_corpus.json'
 VAL_CORPUS_FPATH = '../data/val_corpus.json'
@@ -38,11 +40,11 @@ def load_corpus(files, verbose=False):
 train_corpus = load_corpus(TRAIN_FILES, verbose=True)
 val_corpus = load_corpus(VAL_FILES, verbose=True)
 
-with open(TRAIN_CORPUS_FPATH, 'w+') as f:
-    json.dump(train_corpus, f)
+with open(TRAIN_CORPUS_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(train_corpus, f, ensure_ascii=False)
 
-with open(VAL_CORPUS_FPATH, 'w+') as f:
-    json.dump(val_corpus, f)
+with open(VAL_CORPUS_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(val_corpus, f, ensure_ascii=False)
 
 TRAIN_QUERIES_FPATH = '../data/train_queries.json'
 TRAIN_RELEVANT_DOCS_FPATH = '../data/train_relevant_docs.json'
@@ -51,25 +53,13 @@ VAL_QUERIES_FPATH = '../data/val_queries.json'
 VAL_RELEVANT_DOCS_FPATH = '../data/val_relevant_docs.json'
 
 
-with open(TRAIN_CORPUS_FPATH, 'r+') as f:
+with open(TRAIN_CORPUS_FPATH, 'r+', encoding='utf-8') as f:
     train_corpus = json.load(f)
 
 with open(VAL_CORPUS_FPATH, 'r+') as f:
     val_corpus = json.load(f)
 
-def generate_queries(
-    corpus,
-    num_questions_per_chunk=2,
-    prompt_template=None,
-    verbose=False,
-):
-    """
-    Automatically generate hypothetical questions that could be answered with
-    doc in the corpus.
-    """
-    llm = OpenAI(model='gpt-3.5-turbo', api_key='API-KEY')
-
-    prompt_template = prompt_template or """\
+"""\
     Context information is below.
     
     ---------------------
@@ -84,6 +74,34 @@ def generate_queries(
     quiz/examination. The questions should be diverse in nature \
     across the document. Restrict the questions to the \
     context information provided."
+    """
+
+def generate_queries(
+    corpus,
+    num_questions_per_chunk=2,
+    prompt_template=None,
+    verbose=False,
+):
+    """
+    Automatically generate hypothetical questions that could be answered with
+    doc in the corpus.
+    """
+    llm = OpenAI(model='gpt-3.5-turbo', api_key=API_KEY)
+
+    prompt_template = prompt_template or """\
+    컨텍스트 정보는 아래와 같습니다.
+    
+    ---------------------
+    {context_str}
+    ---------------------
+    
+    사전 지식이 아닌 컨텍스트 정보를 제공합니다.
+    아래 쿼리를 기반으로 질문만 생성합니다.
+    
+    당신은 교사/교수입니다. 당신의 임무는 \
+    {num_questions_per_chunk} 개의 질문들이 주어지면 퀴즈/시험 형식으로 구성해주는 것입니다. \
+    문제는 본질적으로 문서 전반에 걸쳐 다양해야 합니다. \
+    제공된 컨텍스트 정보로 질문을 제한합니다.
     """
 
     queries = {}
@@ -108,17 +126,17 @@ train_queries, train_relevant_docs = generate_queries(train_corpus)
 
 val_queries, val_relevant_docs = generate_queries(val_corpus)
 
-with open(TRAIN_QUERIES_FPATH, 'w+') as f:
-    json.dump(train_queries, f)
+with open(TRAIN_QUERIES_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(train_queries, f, ensure_ascii=False)
 
-with open(TRAIN_RELEVANT_DOCS_FPATH, 'w+') as f:
-    json.dump(train_relevant_docs, f)
+with open(TRAIN_RELEVANT_DOCS_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(train_relevant_docs, f, ensure_ascii=False)
 
-with open(VAL_QUERIES_FPATH, 'w+') as f:
-    json.dump(val_queries, f)
+with open(VAL_QUERIES_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(val_queries, f, ensure_ascii=False)
 
-with open(VAL_RELEVANT_DOCS_FPATH, 'w+') as f:
-    json.dump(val_relevant_docs, f)
+with open(VAL_RELEVANT_DOCS_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(val_relevant_docs, f, ensure_ascii=False)
 
 TRAIN_DATASET_FPATH = '../data/train_dataset.json'
 VAL_DATASET_FPATH = '../data/val_dataset.json'
@@ -135,8 +153,8 @@ val_dataset = {
     'relevant_docs': val_relevant_docs,
 }
 
-with open(TRAIN_DATASET_FPATH, 'w+') as f:
-    json.dump(train_dataset, f)
+with open(TRAIN_DATASET_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(train_dataset, f, ensure_ascii=False)
 
-with open(VAL_DATASET_FPATH, 'w+') as f:
-    json.dump(val_dataset, f)
+with open(VAL_DATASET_FPATH, 'w+', encoding='utf-8') as f:
+    json.dump(val_dataset, f, ensure_ascii=False)
