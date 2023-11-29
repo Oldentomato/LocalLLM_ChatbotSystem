@@ -2,13 +2,14 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.document_loaders import PyPDFLoader
 from langchain.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import CohereRerank
 import os
-from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline, RobertaForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline
 from langchain import HuggingFacePipeline
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 from .custom.textstreamer import TextStreamer
-import tempfile
 from langchain.memory import ConversationBufferMemory
 
 #"beomi/llama-2-ko-7b"
@@ -25,7 +26,6 @@ class Set_LocalModel:
 
     def get_llm_model(self):
         print("model load")
-        # self.pre_model = RobertaForCausalLM.from_pretrained(self.model, is_decoder=True)
         self.pre_model = AutoModelForCausalLM.from_pretrained(
         self.model,
         device_map="auto",
@@ -34,7 +34,6 @@ class Set_LocalModel:
         )
 
         self.tokenizer = LlamaTokenizerFast.from_pretrained(self.model)
-        # self.tokenizer = AutoTokenizer.from_pretrained(self.model)
 
 
 
@@ -132,19 +131,27 @@ class Set_LocalModel:
             memory = ConversationBufferMemory(memory_key="chat_history", input_key="question", output_key="answer", return_messages=True)
 
             # Set retriever and LLM
-            retriever = db.as_retriever(search_kwargs={"k": 2})
+            retriever = db.as_retriever(search_kwargs={"k": 5})
+
+            compressor = CohereRerank()
+            compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=retriever)
+
             print("qa_chain load")
             qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=hf_model,
                 chain_type="stuff",
-                retriever=retriever,
+                retriever=compression_retriever,
                 return_source_documents=True,
                 memory=memory,
                 combine_docs_chain_kwargs={"prompt":self.__set_prompt()}
                 )
 
 
-            qa_chain({"question":question})
+            response = qa_chain({"question":question})
+
+            for source in response['source_documents']:
+                g.send(f"파일: {os.path.basename(source.metadata['source'])}")
+                g.send(f"패이지: {source.metadata['page']}")
 
 
         except Exception as e:

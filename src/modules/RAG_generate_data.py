@@ -10,7 +10,6 @@ from llama_index.llms import OpenAI
 from llama_index.schema import MetadataMode
 from tqdm.notebook import tqdm
 
-API_KEY = "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"
 
 TRAIN_FILES = ['../data/SAMPLE.pdf']
 VAL_FILES = ['../data/SAMPLE.pdf']

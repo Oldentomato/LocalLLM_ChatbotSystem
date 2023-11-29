@@ -61,7 +61,8 @@ class TextStreamer:
     def on_finalized_text(self, text: str, stream_end: bool = False):
         """Prints the new text to stdout. If the stream is ending, also prints a newline."""
         print(f"{text}", flush=True, end="" if not stream_end else None)
-        self.gen.send(text)
+        if not stream_end:
+            self.gen.send(text)
 
     def _is_chinese_char(self, cp):
         """Checks whether CP is the codepoint of a CJK character."""
