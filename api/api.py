@@ -17,9 +17,9 @@ app.add_middleware(
 )
 
 # 미들웨어: Trusted Host 설정 (보안을 위해 사용)
-app.add_middleware(
-    TrustedHostMiddleware, allowed_hosts=["localhost"]
-)
+# app.add_middleware(
+#     TrustedHostMiddleware, allowed_hosts=["localhost"]
+# )
 
 #로깅 설정
 logging.basicConfig(level=logging.INFO)

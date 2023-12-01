@@ -14,7 +14,7 @@ VAL_DATASET_FPATH = '../data/val_dataset.json'
 
 # We use a very small batchsize to run this toy example on a local machine. 
 # This should typically be much larger. 
-BATCH_SIZE = 10
+BATCH_SIZE = 20
 
 with open(TRAIN_DATASET_FPATH, 'r+', encoding='utf-8') as f:
     train_dataset = json.load(f)

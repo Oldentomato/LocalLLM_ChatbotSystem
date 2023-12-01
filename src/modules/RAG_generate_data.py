@@ -11,8 +11,8 @@ from llama_index.schema import MetadataMode
 from tqdm.notebook import tqdm
 
 
-TRAIN_FILES = ['../data/SAMPLE.pdf']
-VAL_FILES = ['../data/SAMPLE.pdf']
+TRAIN_FILES = ['../data/corona.pdf']
+VAL_FILES = ['../data/corona.pdf']
 
 TRAIN_CORPUS_FPATH = '../data/train_corpus.json'
 VAL_CORPUS_FPATH = '../data/val_corpus.json'
@@ -77,7 +77,7 @@ with open(VAL_CORPUS_FPATH, 'r+') as f:
 
 def generate_queries(
     corpus,
-    num_questions_per_chunk=2,
+    num_questions_per_chunk=10,
     prompt_template=None,
     verbose=False,
 ):
@@ -85,7 +85,7 @@ def generate_queries(
     Automatically generate hypothetical questions that could be answered with
     doc in the corpus.
     """
-    llm = OpenAI(model='gpt-3.5-turbo', api_key=API_KEY)
+    llm = OpenAI(model='gpt-3.5-turbo', api_key)
 
     prompt_template = prompt_template or """\
     컨텍스트 정보는 아래와 같습니다.

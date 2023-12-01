@@ -13,9 +13,13 @@ local_model = Set_LocalModel()
 local_model.get_llm_model()
 local_model.get_embedding_model()
 
+#이 변수들은 product할때는 sql에서 가져오는 것으로 해야함
+
+
 class ThreadGenerator:
     def __init__(self):
         self.queue = queue.Queue()
+
 
     def __iter__(self):
         return self
@@ -27,6 +31,8 @@ class ThreadGenerator:
     
     def send(self, data):
         self.queue.put(data)
+
+
 
     def close(self):
         self.queue.put(StopIteration)

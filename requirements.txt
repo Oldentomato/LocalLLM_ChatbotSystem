@@ -24,3 +24,4 @@ fastapi==0.103.2
 python-multipart
 uvicorn==0.23.2
 llama_index
+pyngrok
