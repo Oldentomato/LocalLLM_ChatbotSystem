@@ -6,7 +6,7 @@ import re
 
 # define model
 #"BAAI/bge-small-en"
-model_id = "BM-K/KoSimCSE-roberta"
+model_id = "beomi/kcbert-base"
 model = SentenceTransformer(model_id)
 
 TRAIN_DATASET_FPATH = '../data/train_dataset.json'

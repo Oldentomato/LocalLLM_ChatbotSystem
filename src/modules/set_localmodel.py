@@ -17,14 +17,14 @@ from langchain.prompts.chat import (
 )
 
 #"beomi/llama-2-ko-7b"
-#"/prj/src/data/7b-hf"
 #"jhgan/ko-sroberta-multitask"
 #"/prj/out/exp_finetune"
+#"beomi/kcbert-base"
 
 class Set_LocalModel:
     def __init__(self):
         self.model = "beomi/llama-2-ko-7b"
-        self.embedd_model = "/prj/out/exp_finetune"
+        self.embedd_model = "beomi/kcbert-base"
         self.chat_history = []
         self.context = ""
 
@@ -51,6 +51,7 @@ class Set_LocalModel:
 
         self.embeddings = HuggingFaceEmbeddings(model_name=self.embedd_model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
         self.embeddings.client.tokenizer.pad_token = self.embeddings.client.tokenizer.eos_token
+        self.embeddings.client.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 
 
@@ -146,7 +147,7 @@ class Set_LocalModel:
             )
             hf_model = HuggingFacePipeline(pipeline=pipe)
 
-            # memory = ConversationBufferMemory(memory_key="chat_history", input_key="question", output_key="answer", return_messages=True)
+            memory = ConversationBufferMemory(memory_key="chat_history", input_key="question", output_key="answer", return_messages=True)
 
             # Set retriever and LLM
             retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 1})
@@ -159,16 +160,17 @@ class Set_LocalModel:
                 chain_type="stuff", #map_rerank
                 retriever=retriever,
                 return_source_documents=True,
+                memory=memory,
                 combine_docs_chain_kwargs={"prompt":self.__set_prompt()}
                 )
 
             print(self.context)
             print(self.chat_history)
             #, "context" : self.context, "chat_history": self.chat_history
-            response = qa_chain({"question":question, "context" : self.context, "chat_history": self.chat_history})
+            response = qa_chain({"question":question})
             self.chat_history.append((question, response["answer"]))
             self.context = response["answer"]
-            print(response)
+            # print(response)
 
             g.send(f"\n파일: {os.path.basename(response['source_documents'][0].metadata['source'])}")
             g.send(f"\n페이지: {response['source_documents'][0].metadata['page']}")

@@ -9,6 +9,7 @@ import uuid
 from llama_index.llms import OpenAI
 from llama_index.schema import MetadataMode
 from tqdm.notebook import tqdm
+from config import OPENAI_API_KEY
 
 
 TRAIN_FILES = ['../data/corona.pdf']
@@ -85,7 +86,7 @@ def generate_queries(
     Automatically generate hypothetical questions that could be answered with
     doc in the corpus.
     """
-    llm = OpenAI(model='gpt-3.5-turbo', api_key)
+    llm = OpenAI(model='gpt-3.5-turbo', api_key=OPENAI_API_KEY)
 
     prompt_template = prompt_template or """\
     컨텍스트 정보는 아래와 같습니다.
@@ -97,8 +98,8 @@ def generate_queries(
     사전 지식이 아닌 컨텍스트 정보를 제공합니다.
     아래 쿼리를 기반으로 질문만 생성합니다.
     
-    당신은 교사/교수입니다. 당신의 임무는 \
-    {num_questions_per_chunk} 개의 질문들이 주어지면 퀴즈/시험 형식으로 구성해주는 것입니다. \
+    당신은 교사/교수입니다. 당신의 임무는 컨텍스트 정보가 주어지면\
+    {num_questions_per_chunk} 개의 질문들을 생성하여 퀴즈/시험 형식으로 구성해주는 것입니다. \
     문제는 본질적으로 문서 전반에 걸쳐 다양해야 합니다. \
     제공된 컨텍스트 정보로 질문을 제한합니다.
     """
