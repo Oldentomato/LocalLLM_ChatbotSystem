@@ -103,12 +103,12 @@ class Set_LocalModel:
 
     def __set_prompt(self):
         prompt_template = """당신은 문서검색 지원 에이전트입니다.
-        채팅 기록과 관련된 다음 사용자(<hs></hs>로 구분)를 사용하여 마지막에 질문에 답합니다.
-        친근하게 대답해도 되지만 지나치게 수다를 떨면 안 됩니다. 상황 정보는 아래에 있습니다.(<cx></cx>로 구분) 사전 지식이 아닌 상황 정보가 주어지면 질문에 답하십시오.
-        답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.
-        채팅 기록은 다시 답변에서 말하지 마세요.\n 
-        <cx>{context}</cx>
-        <hs>{chat_history}</hs>
+        지금까지의 대화내역을 사용하여 마지막에 질문에 답합니다. 대화내역은 아래와 같습니다.\n
+        {chat_history}\n
+        친근하게 대답해도 되지만 지나치게 수다를 떨면 안 됩니다. 사전 지식이 아닌 상황 정보가 주어지면 질문에 답하십시오. 상황 정보는 아래에 있습니다.\n
+        {context}\n
+        답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.\n
+        참고된 pdf의 페이지가 없다면 없다고 답하세요.\n
         """
 
         sys_prompt: PromptTemplate = PromptTemplate(
@@ -140,7 +140,7 @@ class Set_LocalModel:
             db.get() 
 
 
-            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True)
+            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True, Timeout=5)
 
             pipe = pipeline(
                 "text-generation", model=self.pre_model, repetition_penalty=1.1, tokenizer=self.tokenizer, return_full_text = True, max_new_tokens=200, streamer=streamer
