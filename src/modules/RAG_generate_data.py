@@ -12,7 +12,7 @@ from tqdm.notebook import tqdm
 from config import OPENAI_API_KEY
 
 
-TRAIN_FILES = ['../data/corona.pdf']
+TRAIN_FILES = ['../data/traffic.pdf']
 VAL_FILES = ['../data/corona.pdf']
 
 TRAIN_CORPUS_FPATH = '../data/train_corpus.json'
@@ -78,7 +78,7 @@ with open(VAL_CORPUS_FPATH, 'r+') as f:
 
 def generate_queries(
     corpus,
-    num_questions_per_chunk=10,
+    num_questions_per_chunk=2,
     prompt_template=None,
     verbose=False,
 ):

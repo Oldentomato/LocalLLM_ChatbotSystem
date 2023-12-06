@@ -28,7 +28,7 @@ class TextStreamer:
         text = self.tokenizer.decode(self.token_cache, **self.decode_kwargs)
 
         # After the symbol for a new line, we flush the cache.
-        if text.endswith("\n"):
+        if text.endswith("\n" or "\u200b"):
             printable_text = text[self.print_len :]
             self.token_cache = []
             self.print_len = 0

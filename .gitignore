@@ -1,6 +1,7 @@
 */data
 */data_store
 */config.py
+config.py
 out/
 */cache
-*/upload
+upload/

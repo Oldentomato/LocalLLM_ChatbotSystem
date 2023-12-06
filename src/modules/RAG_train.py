@@ -51,7 +51,7 @@ relevant_docs = dataset['relevant_docs']
 
 evaluator = InformationRetrievalEvaluator(queries, corpus, relevant_docs)
 
-EPOCHS = 100
+EPOCHS = 10
 
 warmup_steps = int(len(loader) * EPOCHS * 0.1)
 
