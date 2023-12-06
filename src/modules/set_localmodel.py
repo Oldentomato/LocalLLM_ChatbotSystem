@@ -15,7 +15,7 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate,
     MessagesPlaceholder
 )
-from config import OPENAI_API_KEY
+from .config import OPENAI_API_KEY
 from langchain.chat_models import ChatOpenAI
 from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 
@@ -27,10 +27,16 @@ from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 class Set_LocalModel:
     def __init__(self):
         self.model = "beomi/llama-2-ko-7b"
-        self.embedd_model = "/prj/out/exp_finetune"
+        self.embedd_model = "beomi/kcbert-base"
         self.chat_history = []
         self.context = ""
 
+
+    def read_summary(self):
+        with open("/prj/src/data_store/summary.txt", "r") as file:
+            self.summary = file.read()
+
+        print(self.summary)
 
 
     def get_llm_model(self):
@@ -98,7 +104,7 @@ class Set_LocalModel:
 
             print("pdf embedd and saved")
             print("document summaring")
-            print(f"총 분할된 도큐먼트 수: {len(self.texts)}")
+            print(f"총 분할된 도큐먼트 수: {len(texts)}")
             
 
             # Map 단계에서 처리할 프롬프트 정의
@@ -110,7 +116,7 @@ class Set_LocalModel:
             답변:"""
             map_prompt = PromptTemplate.from_template(map_template)
             llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo", openai_api_key=OPENAI_API_KEY)
-            map_chain = LLMChain(llm=llm, prompt=map_template)
+            map_chain = LLMChain(llm=llm, prompt=map_prompt)
 
             # Reduce 단계에서 처리할 프롬프트 정의
             reduce_template = """다음은 요약의 집합입니다.:
@@ -160,21 +166,35 @@ class Set_LocalModel:
 
         # 지금까지의 대화내역을 사용하여 마지막에 질문에 답합니다. 대화내역은 아래와 같습니다.\n
         # {chat_history}\n
+        # 사전 지식이 아닌 상황 정보가 주어지면 질문에 대답해주세요. 친근하게 대답해도 되지만 지나치게 수다를 떨면 안 됩니다. 상황 정보는 아래에 있습니다.\n
+        # {context}\n
 
     def __set_prompt(self):
-        prompt_template = """당신은 문서검색 지원 에이전트입니다.
-        요약 정보를 제공하면 그 정보를 활용하여 대답해주세요. 친근하게 대답해도 되지만 지나치게 수다를 떨면 안 됩니다. 요약 정보는 아래에 있습니다.\n
-        {context}\n
+        prompt_template = """당신은 문서검색 지원 에이전트입니다.\n
+        요약 정보를 제공하면 그 정보를 활용하여 대답해주세요. 요약 정보는 아래에 있습니다.\n
+        {context}
+        대화 내역을 활용하여 추가적으로 답변을 생성해도 됩니다. 대화 내역은 아래와 같습니다.\n
+        {chat_history}
         답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.\n
         참고된 pdf의 페이지가 없다면 없다고 답하세요.\n
         """
+        system_prompt = PromptTemplate(
+            template=prompt_template,
+            input_variables=["context", "chat_history"]
+        )
 
-        system_template = SystemMessagePromptTemplate.from_template(prompt_template)
-        system_message = system_template.format(context=self.summary)
+        system_message_prompt = SystemMessagePromptTemplate(prompt=system_prompt)
 
-        chat_prompt = ChatPromptTemplate.from_messages([system_message, 
-                                                        MessagesPlaceholder(variable_name="chat_history"),
-                                                        HumanMessagePromptTemplate.from_template("{question}")])
+        question_prompt = PromptTemplate(
+            template="""아래 문장에 대한 답변을 말해주세요.\n
+            {question}\n
+            답변:""",
+            input_variables=["question"]
+        )
+
+        question_message_prompt = HumanMessagePromptTemplate(prompt=question_prompt)
+
+        chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, question_message_prompt])
 
 
         return chat_prompt
@@ -186,36 +206,34 @@ class Set_LocalModel:
             db.get() 
 
 
-            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=False, Timeout=3)
+            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True, Timeout=3)
 
             pipe = pipeline(
                 "text-generation", model=self.pre_model, repetition_penalty=1.1, tokenizer=self.tokenizer, return_full_text = False, max_new_tokens=200, streamer=streamer
             )
             hf_model = HuggingFacePipeline(pipeline=pipe)
 
-            memory = ConversationBufferMemory(memory_key="chat_history", input_key="question", output_key="answer", return_messages=True)
+            memory = ConversationBufferMemory(memory_key="chat_history", human_prefix="question", ai_prefix="answer", return_messages=True)
 
             # Set retriever and LLM
             retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 3})
 
-            con_chain = ConversationalRetrievalChain(memory=memory, get_chat_history="chat_history")
             #compression_retriever
             print("qa_chain load")
-            qa_chain = con_chain.from_llm(
+            qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=hf_model,
                 chain_type="stuff", #map_rerank
                 retriever=retriever,
                 return_source_documents=True,
-                memory=memory,
                 combine_docs_chain_kwargs={"prompt":self.__set_prompt()}
                 )
 
 
             #, "context" : self.context, "chat_history": self.chat_history
-            response = qa_chain({"question":question})
-            print(response)
+            response = qa_chain({"question":question, "chat_history": self.chat_history, "context": self.summary})
+            self.chat_history= [(question, response["answer"])]
 
-            g.send(f"\n파일: {os.path.basename(response['source_documents'][0].metadata['source'])}")
+            g.send(f"\n파일: {os.path.basename(response['source_documents'][0].metadata['source'])}") #3개중에 하나고르는거다보니까 0번으로해버리면 정확해지지가 않음
             g.send(f"\n페이지: {response['source_documents'][0].metadata['page']}")
 
 
