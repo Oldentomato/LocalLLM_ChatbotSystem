@@ -27,7 +27,7 @@ from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 class Set_LocalModel:
     def __init__(self):
         self.model = "beomi/llama-2-ko-7b"
-        self.embedd_model = "beomi/kcbert-base"
+        self.embedd_model = "/prj/out/exp_finetune"
         self.chat_history = []
         self.context = ""
 
@@ -166,8 +166,10 @@ class Set_LocalModel:
 
     def __set_prompt(self):
         prompt_template = """당신은 문서검색 지원 에이전트입니다.\n
-        요약 정보를 제공하면 그 정보를 활용하여 대답해주세요. 요약 정보는 아래에 있습니다.\n
+        전반적인 내용은 아래와 같습니다. 이 내용을 이용해서 답변을 해주세요.\n
         {context}
+        요약 정보를 제공하면 그 정보를 활용하여 대답해주세요. 요약 정보는 아래에 있습니다.\n
+        {summary}
         대화 내역을 활용하여 추가적으로 답변을 생성해도 됩니다. 대화 내역은 아래와 같습니다.\n
         {chat_history}
         답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.\n
@@ -201,31 +203,38 @@ class Set_LocalModel:
             db.get() 
 
 
-            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True)
+            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=False)
 
             pipe = pipeline(
                 "text-generation", 
                 model=self.pre_model, 
-                repetition_penalty=1.5, #높을수록 반복성을 방지시킴
+                repetition_penalty=1.1, #높을수록 반복성을 방지시킴
                 tokenizer=self.tokenizer, 
                 return_full_text = False, 
                 max_new_tokens=200, #max_length는 프롬프트를 포함한 최대길이를 지정, max_new_tokens는 프롬프트를 제외한 최대길이를 지정함
                 streamer=streamer,
             )
-            res = pipe( #__call__
-                do_sample = True, # False로 해두면 Greedy Search만 진행되어 같은 결과만 생성하게 된다.
-                no_repeat_ngram_size=2, #생성시간이 숫자에 비례해서 올라가지만 문장 생성시에 반복되는 경우를 줄일 수 있다.
-                temperature=0.2, # 낮을수록 가장 확률이 높은 토큰을 선택하게됨. 높을수록 더 창의적인 답변이 나오게됨 (낮음: 사실적, 높음: 창의적)
-                #top_k와 top_p는 greedy가 False(do_sample이 True)인 경우에 활용된다.
-                top_k=0, #확률이 높은 순서대로 k번째까지 높은 단어에 대해 필터링한다. 값이 높을수록 무작위 샘플 방식에 가까워지고 낮을수록 탐욕 방식에 가까워진다.
-                top_p=0.95, #여기서 top_k를 0으로두고 top_p의 값만 할당해주면 뉴클러스 샘플링이라고 하게 된다. 확률이 가장 높은 순으로 후보 단어들을 더했을 때 top_p가 되는단어 집합에 대해 샘플링한다.
+            # res = pipe( #__call__
+            #     do_sample = True, # False로 해두면 Greedy Search만 진행되어 같은 결과만 생성하게 된다.
+            #     no_repeat_ngram_size=2, #생성시간이 숫자에 비례해서 올라가지만 문장 생성시에 반복되는 경우를 줄일 수 있다.
+            #     temperature=0.2, # 낮을수록 가장 확률이 높은 토큰을 선택하게됨. 높을수록 더 창의적인 답변이 나오게됨 (낮음: 사실적, 높음: 창의적)
+            #     #top_k와 top_p는 greedy가 False(do_sample이 True)인 경우에 활용된다.
+            #     top_k=0, #확률이 높은 순서대로 k번째까지 높은 단어에 대해 필터링한다. 값이 높을수록 무작위 샘플 방식에 가까워지고 낮을수록 탐욕 방식에 가까워진다.
+            #     top_p=0.95, #여기서 top_k를 0으로두고 top_p의 값만 할당해주면 뉴클러스 샘플링이라고 하게 된다. 확률이 가장 높은 순으로 후보 단어들을 더했을 때 top_p가 되는단어 집합에 대해 샘플링한다.
                 
-                #즉, greedy를 True로 하면 항상 확률이 높은 단어만 선택하기때문에 편향적이고 일관된 문장만 출력하게되고, 경우에 따라 반복되는 단어가 나올수 있고,
-                #greedy를 False로 하면 top_k와top_p의 샘플링 방식을 통해 좀 더 자연스럽고 다양한 문장들을 출력하게 된다.
+            #     #즉, greedy를 True로 하면 항상 확률이 높은 단어만 선택하기때문에 편향적이고 일관된 문장만 출력하게되고, 경우에 따라 반복되는 단어가 나올수 있고,
+            #     #greedy를 False로 하면 top_k와top_p의 샘플링 방식을 통해 좀 더 자연스럽고 다양한 문장들을 출력하게 된다.
 
 
-            )
-            hf_model = HuggingFacePipeline(pipeline=res)
+            # )
+            hf_model = HuggingFacePipeline(pipeline=pipe,
+                                            model_kwargs={
+                                                "do_sample": True,
+                                                "no_repeat_ngram_size": 2,
+                                                "temperature": 0.2,
+                                                "top_k": 0,
+                                                "top_p": 0.95
+                                            })
 
             memory = ConversationBufferMemory(memory_key="chat_history", human_prefix="question", ai_prefix="answer", return_messages=True)
 
@@ -244,7 +253,7 @@ class Set_LocalModel:
 
 
             #, "context" : self.context, "chat_history": self.chat_history
-            response = qa_chain({"question":question, "chat_history": self.chat_history, "context": self.summary})
+            response = qa_chain({"question":question, "chat_history": self.chat_history, "summary": self.summary})
             self.chat_history= [(question, response["answer"])]
 
             g.send(f"\n파일: {os.path.basename(response['source_documents'][0].metadata['source'])}") #3개중에 하나고르는거다보니까 0번으로해버리면 정확해지지가 않음

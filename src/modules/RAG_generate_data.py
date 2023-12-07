@@ -12,7 +12,7 @@ from tqdm.notebook import tqdm
 from config import OPENAI_API_KEY
 
 
-TRAIN_FILES = ['../data/traffic.pdf']
+TRAIN_FILES = ['../data/corona.pdf']
 VAL_FILES = ['../data/corona.pdf']
 
 TRAIN_CORPUS_FPATH = '../data/train_corpus.json'
