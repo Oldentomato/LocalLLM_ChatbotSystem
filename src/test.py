@@ -1,106 +1,129 @@
 from langchain.vectorstores import Chroma
-from config import OPENAI_API_KEY
+# from config import OPENAI_API_KEY
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.embeddings import SentenceTransformerEmbeddings 
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from soylemma import Lemmatizer
 from konlpy.tag import Okt
+import re
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import pandas as pd
+import pickle
 
 lemmatizer = Lemmatizer()
 
+
+def read_pdfs(pdf_files):
+    if not pdf_files:
+        return []
+    
+    pages = []
+    for path in pdf_files:
+        loader = PyPDFLoader(path)
+        for page in loader.load_and_split():
+            pages.append(page)
+
+    return pages
+
+
+def split_pages(pages):
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size = 500,
+        chunk_overlap  = 0,
+        length_function = len,
+        is_separator_regex = False,
+    )
+    texts = text_splitter.split_documents(pages)
+    return texts
+
 def find_elements_with_specific_value(tuple_list, target_value):
-    try:
-        result_list = [t[0] for t in tuple_list if t[1] == target_value]
-    except:
-        return ["None"]
-    else:
-        return result_list
+    result_list = [t[0] for t in tuple_list if t[1] == target_value]
+    return result_list
     
 
-t = Okt()
-lemm_sentence = ''
-query = """창 밖의 동물들은 돼지에서 인간으로, 인간에서 돼지로, 
-다시 돼지에서 인간으로 번갈아 시선을 옮겼다.
-그러나 누가 돼지고 누가 인간인지, 어느 것이 어느 것인지 
-이미 분간할 수 없었다."""
-print(t.pos(query))
-for text in t.pos(query):
-    result_lemm = find_elements_with_specific_value(lemmatizer.lemmatize(text[0]),text[1]) #0 = 텍스트, 1 = 품사
-    lemm_sentence += f"{result_lemm[0]},"
-else:
-    lemm_sentence += result_lemm[0]
+def sentence_tokenizing(query):
+    t = Okt()
+    lemm_sentence = ''
+    stopwords=['의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다']
+    query = re.sub(r"[^\uAC00-\uD7A30-9a-zA-Z\s]", "", query)
+    for text in t.pos(query):
+        if text[0] in stopwords:
+            continue
+        result_lemm = find_elements_with_specific_value(lemmatizer.lemmatize(text[0]),text[1]) #0 = 텍스트, 1 = 품사
+        if len(result_lemm) == 0:
+            lemm_sentence += f"{text[0]} "
+        else:
+            # print(result_lemm)
+            lemm_sentence += f"{result_lemm[0]} "
 
-print(lemm_sentence)
-
-# embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
-
-# WordNetLemmatizer requires Pos tags to understand if the word is noun or verb or adjective etc. By default it is set to Noun
-# def wordLemmatizer(data):
-#     tag_map = defaultdict(lambda : wn.NOUN)
-#     tag_map['J'] = wn.ADJ
-#     tag_map['V'] = wn.VERB
-#     tag_map['R'] = wn.ADV
-#     file_clean_k =pd.DataFrame()
-#     for index,entry in enumerate(data):
-        
-#         # Declaring Empty List to store the words that follow the rules for this step
-#         Final_words = []
-#         # Initializing WordNetLemmatizer()
-#         word_Lemmatized = WordNetLemmatizer()
-#         # pos_tag function below will provide the 'tag' i.e if the word is Noun(N) or Verb(V) or something else.
-#         for word, tag in pos_tag(entry):
-#             # Below condition is to check for Stop words and consider only alphabets
-#             if len(word)>1 and word not in stopwords.words('english') and word.isalpha():
-#                 word_Final = word_Lemmatized.lemmatize(word,tag_map[tag[0]])
-#                 Final_words.append(word_Final)
-#             # The final processed set of words for each iteration will be stored in 'text_final'
-#                 file_clean_k.loc[index,'Keyword_final'] = str(Final_words)
-#                 file_clean_k=file_clean_k.replace(to_replace ="\[.", value = '', regex = True)
-#                 file_clean_k=file_clean_k.replace(to_replace ="'", value = '', regex = True)
-#     return file_clean_k
-
-# def read_pdfs(pdf_files):
-#     if not pdf_files:
-#         return []
-    
-#     pages = []
-#     for path in pdf_files:
-#         loader = PyPDFLoader(path)
-#         for page in loader.load_and_split():
-#             pages.append(page)
-
-#     return pages
+    return lemm_sentence
 
 
-# def split_pages(pages):
-#     text_splitter = RecursiveCharacterTextSplitter(
-#         chunk_size = 500,
-#         chunk_overlap  = 0,
-#         length_function = len,
-#         is_separator_regex = False,
-#     )
-#     texts = text_splitter.split_documents(pages)
-#     return texts
+def find_highest_doc_index(result_list):
+    max_value = float('-inf') #초기 최댓값을 음의 무한대로 설정
+    max_index = None
+
+    for i, sublist in enumerate(result_list):
+        if len(sublist) > 0 and isinstance(sublist[0], (int, float)):
+            value = sublist[0]
+            if value > max_value:
+                max_value = value
+                max_index = i
+
+    return max_index
+
+print("read_pdfs")
+pages = read_pdfs(["/prj/upload/corona.pdf"])
+print("split_pdfs")
+texts = split_pages(pages)
+
+content = []
+source = []
+origin_content = []
+for text in texts:
+    origin_content.append(text.page_content)
+    result_sentence = sentence_tokenizing(text.page_content)
+    content.append(result_sentence)
+    source.append((text.metadata['source'],text.metadata['page']))
+
+persist_directory = "/prj/src/tf_data_store"
+
+vectorizer = TfidfVectorizer()
+tfidf_matrix = vectorizer.fit_transform(content)
+
+def text_splitter(text):
+    return text.split()
+# # save
+# with open(f'{persist_directory}/test2.pickle', 'wb') as f:
+#     pickle.dump(tfidf_matrix, f)
+
+
+# load
+with open(f'{persist_directory}/test2.pickle', 'rb') as f:
+    tfidf_matrix = pickle.load(f)
+
+# feature_names = vectorizer.get_feature_names_out() #시각화
+# df_tfidf = pd.DataFrame(tfidf_matrix.toarray(), columns=feature_names)#시각화
+
+# print(df_tfidf) #pdf 문장들 vectorizing 결과
+
+query = "코로나바이러스-19란 무엇인가요?"
+new_query = sentence_tokenizing(query)
+query_vector = vectorizer.transform([new_query])
+
+# query_feature_names = vectorizer.get_feature_names_out()#시각화
+# df_tfidf_query = pd.DataFrame(query_vector.toarray(), columns=query_feature_names)#시각화
 
 
 
-# pdf_dirs = ["../upload/corona.pdf"]
-# pages = read_pdfs(pdf_dirs)
-# texts = split_pages(pages)
-# stopwords=['의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다']
+#유사성 계산
+similarity_scores = cosine_similarity(tfidf_matrix, query_vector)
+result_index = find_highest_doc_index(similarity_scores)
+print(f"내용: {origin_content[result_index]}\n")
+print(f"소스: {source[result_index]}\n")
+print(f"점수: {similarity_scores[result_index]}")
+print(f"전체점수: {similarity_scores}")
 
 
-# tokenized=[]
-# for content in texts:
-#     sentence = content.page_content
-#     sentence = sentence.str.replace("[^ㄱ-ㅎㅏ-ㅣ가-힣 ]","", regex=True)
-#     temp = tokenizer.morphs(sentence)
-#     temp = [word for word in temp if not word in stopwords] #불용어 제거
-#     tokenized.append(temp)
-
-
-# print(text[0].page_content)
-# embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-# db = Chroma(persist_directory="../data_store")
-# print(db._collection.get())
