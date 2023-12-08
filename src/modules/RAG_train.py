@@ -4,6 +4,7 @@ import json
 from torch.utils.data import DataLoader
 import re
 
+#tf-idf
 # define model
 #"BAAI/bge-small-en"
 model_id = "beomi/kcbert-base"
