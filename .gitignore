@@ -5,3 +5,4 @@ config.py
 out/
 */cache
 upload/
+*/tf_data_store

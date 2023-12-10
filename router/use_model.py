@@ -10,9 +10,9 @@ from typing import List
 
 usemodel = APIRouter()
 local_model = Set_LocalModel()
-local_model.get_llm_model()
-local_model.get_embedding_model()
-local_model.read_summary()
+# local_model.get_llm_model()
+# local_model.get_embedding_model()
+# local_model.read_summary()
 
 #이 변수들은 product할때는 sql에서 가져오는 것으로 해야함
 
@@ -51,14 +51,21 @@ def chat_llama(query):
 
 
 @usemodel.post("/pdfembedding")
-async def llamaquery(pdfs: List[UploadFile]):
+async def embedding(pdfs: List[UploadFile], mode: str = "tf-idf"):
     files = []
     for pdf in pdfs:
         with open("./upload/"+pdf.filename, "wb") as f:
             f.write(pdf.file.read())
         files.append("./upload/"+pdf.filename)
-    success,e = local_model.pdf_embedding(files)
+    success,e = local_model.pdf_embedding(files, mode)
     return {"success":success, "error": e}
+
+
+@usemodel.post("/searchdoc")
+async def search_doc(query: str = Form(...), doc_count: int = 1, mode: str = "tf-idf"):
+    content, source, page, score = local_model.search_doc(query, doc_count, mode)
+    return {"doc": content, "score": score, "source": source, "page": page}
+
 
 @usemodel.post("/llamaquery")
 async def llamaquery(query: str = Form(...)):

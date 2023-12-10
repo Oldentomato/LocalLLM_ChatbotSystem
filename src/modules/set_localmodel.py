@@ -1,11 +1,8 @@
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.document_loaders import PyPDFLoader
 from langchain.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
 from transformers import AutoModelForCausalLM, LlamaTokenizerFast, pipeline
 from langchain import HuggingFacePipeline
-from langchain.chains import ConversationalRetrievalChain, LLMChain, ReduceDocumentsChain, MapReduceDocumentsChain
+from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 from .custom.textstreamer import TextStreamer
 from langchain.memory import ConversationBufferMemory
@@ -15,9 +12,8 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate,
     MessagesPlaceholder
 )
-from .config import OPENAI_API_KEY
-from langchain.chat_models import ChatOpenAI
-from langchain.chains.combine_documents.stuff import StuffDocumentsChain
+from .embedding import Embedding_Document
+
 
 #"beomi/llama-2-ko-7b"
 #"jhgan/ko-sroberta-multitask"
@@ -30,6 +26,9 @@ class Set_LocalModel:
         self.embedd_model = "/prj/out/exp_finetune"
         self.chat_history = []
         self.context = ""
+        self.doc_embedd = Embedding_Document(
+            save_vector_dir = "/prj/src/tf_data_store"
+        )
 
 
     def read_summary(self):
@@ -53,116 +52,6 @@ class Set_LocalModel:
 
 
 
-    def get_embedding_model(self):
-        print("embedding model load")
-        model_kwargs = {'device': 'cuda'}
-        encode_kwargs = {'normalize_embeddings': True}
-
-        self.embeddings = HuggingFaceEmbeddings(model_name=self.embedd_model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
-        self.embeddings.client.tokenizer.pad_token = self.embeddings.client.tokenizer.eos_token
-        self.embeddings.client.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-
-
-
-    def pdf_embedding(self, pdf_files):
-        def read_pdfs(pdf_files):
-            if not pdf_files:
-                return []
-            
-            pages = []
-            for path in pdf_files:
-                loader = PyPDFLoader(path)
-                for page in loader.load_and_split():
-                    pages.append(page)
-
-            return pages
-
-
-        def split_pages(pages):
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size = 500,
-                chunk_overlap  = 0,
-                length_function = len,
-                is_separator_regex = False,
-            )
-            texts = text_splitter.split_documents(pages)
-            return texts
-
-
-        try:
-            print("read_pdfs")
-            pages = read_pdfs(pdf_files)
-            print("split_pdfs")
-            texts = split_pages(pages)
-
-            persist_directory = "/prj/src/data_store" 
-            print("pdf embedding")
-            db = Chroma.from_documents( #chromadb 임베딩된 텍스트 데이터들을 효율적으로 저장하기위한 모듈
-                documents=texts,
-                embedding=self.embeddings,
-                persist_directory=persist_directory)
-
-            print("pdf embedd and saved")
-            print("document summaring")
-            print(f"총 분할된 도큐먼트 수: {len(texts)}")
-            
-
-            # Map 단계에서 처리할 프롬프트 정의
-            # 분할된 문서에 적용할 프롬프트 내용을 기입합니다.
-            # 여기서 {pages} 변수에는 분할된 문서가 차례대로 대입되니다.
-            map_template = """다음은 문서 중 일부 내용입니다.
-            {pages}
-            이 문서 목록을 기반으로 주요 내용을 요약해 주세요.
-            답변:"""
-            map_prompt = PromptTemplate.from_template(map_template)
-            llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo", openai_api_key=OPENAI_API_KEY)
-            map_chain = LLMChain(llm=llm, prompt=map_prompt)
-
-            # Reduce 단계에서 처리할 프롬프트 정의
-            reduce_template = """다음은 요약의 집합입니다.:
-            {doc_summaries}
-            이것들을 바탕으로 통합된 요약을 만들어 주세요.
-            답변:"""
-            reduce_prompt = PromptTemplate.from_template(reduce_template)
-
-            reduce_chain = LLMChain(llm=llm, prompt=reduce_prompt)
-
-            # 문서의 목록을 받아들여, 이를 단일 문자열로 결합하고, 이를 LLMChain에 전달합니다.
-            combine_documents_chain = StuffDocumentsChain(
-                llm_chain=reduce_chain,
-                document_variable_name="doc_summaries"
-            )
-
-            # Map 문서를 통합하고 순차적으로 Reduce합니다.
-            reduce_documents_chain = ReduceDocumentsChain(
-                # 호출되는 최종 체인입니다.
-                combine_documents_chain=combine_documents_chain,
-                # 문서가 `StuffDocumentsChain`의 컨텍스트를 초과하는 경우
-                collapse_documents_chain=combine_documents_chain,
-                # 문서를 그룹화할 때의 토큰 최대 개수입니다.
-                token_max=4000,
-            )
-
-            # 문서들에 체인을 매핑하여 결합하고, 그 다음 결과들을 결합합니다.
-            map_reduce_chain = MapReduceDocumentsChain(
-                # Map 체인
-                llm_chain=map_chain,
-                # Reduce 체인
-                reduce_documents_chain=reduce_documents_chain,
-                # 문서를 넣을 llm_chain의 변수 이름(map_template 에 정의된 변수명)
-                document_variable_name="pages",
-                # 출력에서 매핑 단계의 결과를 반환합니다.
-                return_intermediate_steps=False,
-            )
-
-            self.summary = map_reduce_chain.run(texts)
-            print(f"pdf문서 요약: {self.summary}")
-
-            return True, None
-        except Exception as e:
-            print("error to embedding")
-            print(f"error_msg: {e}")
-            return False, e
 
     def __set_prompt(self):
         prompt_template = """당신은 문서검색 지원 에이전트입니다.\n
@@ -195,9 +84,28 @@ class Set_LocalModel:
 
 
         return chat_prompt
+    
+
+    def pdf_embedding(self, pdfs, embedding_mode="tf-idf"):
+        if embedding_mode == "bert":
+            self.doc_embedd
+            return
+        elif embedding_mode == "tf-idf":
+            success, e = self.doc_embedd.embedding_tf_idf(pdfs)
 
 
-    def run_QA(self, g, question):
+        return success, e
+
+
+    def search_doc(self, query, k, embedding_mode="bert"):
+        if embedding_mode == "tf-idf":
+            content, source, page, score = self.doc_embedd.tf_idf_search_doc(query, k)
+
+        return content, source, page, score
+
+    
+
+    def run_QA(self, g, question, embedding_mode="bert"):
         try:
             db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
             db.get() 

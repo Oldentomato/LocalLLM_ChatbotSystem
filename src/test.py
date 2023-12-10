@@ -93,16 +93,19 @@ persist_directory = "/prj/src/tf_data_store"
 vectorizer = TfidfVectorizer()
 tfidf_matrix = vectorizer.fit_transform(content)
 
-def text_splitter(text):
-    return text.split()
+
 # # save
-# with open(f'{persist_directory}/test2.pickle', 'wb') as f:
-#     pickle.dump(tfidf_matrix, f)
+with open(f'{persist_directory}/test2.pickle', 'wb') as f:
+    pickle.dump(tfidf_matrix, f)
+with open(f'{persist_directory}/tfidf_vectorizer.pkl', 'wb') as file:
+    pickle.dump(vectorizer, file)
 
 
 # load
 with open(f'{persist_directory}/test2.pickle', 'rb') as f:
     tfidf_matrix = pickle.load(f)
+with open(f'{persist_directory}/tfidf_vectorizer.pkl', 'rb') as file:
+    loaded_vectorizer = pickle.load(file)
 
 # feature_names = vectorizer.get_feature_names_out() #시각화
 # df_tfidf = pd.DataFrame(tfidf_matrix.toarray(), columns=feature_names)#시각화
@@ -111,7 +114,7 @@ with open(f'{persist_directory}/test2.pickle', 'rb') as f:
 
 query = "코로나바이러스-19란 무엇인가요?"
 new_query = sentence_tokenizing(query)
-query_vector = vectorizer.transform([new_query])
+query_vector = loaded_vectorizer.transform([new_query])
 
 # query_feature_names = vectorizer.get_feature_names_out()#시각화
 # df_tfidf_query = pd.DataFrame(query_vector.toarray(), columns=query_feature_names)#시각화
