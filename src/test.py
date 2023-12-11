@@ -11,8 +11,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 import pickle
-
-lemmatizer = Lemmatizer()
+import nltk
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+from nltk.tokenize import RegexpTokenizer
 
 
 def read_pdfs(pdf_files):
@@ -38,14 +39,15 @@ def split_pages(pages):
     texts = text_splitter.split_documents(pages)
     return texts
 
+
 def find_elements_with_specific_value(tuple_list, target_value):
     result_list = [t[0] for t in tuple_list if t[1] == target_value]
     return result_list
-    
 
 def sentence_tokenizing(query):
+    lemmatizer = Lemmatizer()
     t = Okt()
-    lemm_sentence = ''
+    lemm_sentence = []
     stopwords=['의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다']
     query = re.sub(r"[^\uAC00-\uD7A30-9a-zA-Z\s]", "", query)
     for text in t.pos(query):
@@ -53,80 +55,64 @@ def sentence_tokenizing(query):
             continue
         result_lemm = find_elements_with_specific_value(lemmatizer.lemmatize(text[0]),text[1]) #0 = 텍스트, 1 = 품사
         if len(result_lemm) == 0:
-            lemm_sentence += f"{text[0]} "
+            lemm_sentence.append(text[0])
         else:
             # print(result_lemm)
-            lemm_sentence += f"{result_lemm[0]} "
+            lemm_sentence.append(result_lemm[0])
 
     return lemm_sentence
 
 
-def find_highest_doc_index(result_list):
-    max_value = float('-inf') #초기 최댓값을 음의 무한대로 설정
-    max_index = None
-
-    for i, sublist in enumerate(result_list):
-        if len(sublist) > 0 and isinstance(sublist[0], (int, float)):
-            value = sublist[0]
-            if value > max_value:
-                max_value = value
-                max_index = i
-
-    return max_index
-
 print("read_pdfs")
-pages = read_pdfs(["/prj/upload/corona.pdf"])
+pages = read_pdfs(["../upload/traffic.pdf"])
 print("split_pdfs")
 texts = split_pages(pages)
 
 content = []
 source = []
 origin_content = []
+
 for text in texts:
     origin_content.append(text.page_content)
     result_sentence = sentence_tokenizing(text.page_content)
     content.append(result_sentence)
     source.append((text.metadata['source'],text.metadata['page']))
 
-persist_directory = "/prj/src/tf_data_store"
+tagged_data = [TaggedDocument(words=content, tags=[str(id)]) for id, content in enumerate(content)]
 
-vectorizer = TfidfVectorizer()
-tfidf_matrix = vectorizer.fit_transform(content)
+max_epochs = 10
 
+model = Doc2Vec(
+    window=20, #모델 학습할 때 앞뒤로 보는 단어의 수
+    vector_size=300, #벡터 차원의 크기
+    alpha=0.025, #lr
+    min_alpha=0.025,
+    min_count=5, #학습에 사용할 최소 단어 빈도 수
+    dm=1, #학습방법 1=PV-DM, 0=PV_DBOW
+    negative=5, #Complexity Reduction 방법, negative sampling
+    seed=9999
+)
 
-# # save
-with open(f'{persist_directory}/test2.pickle', 'wb') as f:
-    pickle.dump(tfidf_matrix, f)
-with open(f'{persist_directory}/tfidf_vectorizer.pkl', 'wb') as file:
-    pickle.dump(vectorizer, file)
+model.build_vocab(tagged_data)
 
+for epoch in range(max_epochs):
+    print(f'iteration {epoch}')
+    model.train(tagged_data, 
+                total_examples=model.corpus_count,
+                epochs=max_epochs)
 
-# load
-with open(f'{persist_directory}/test2.pickle', 'rb') as f:
-    tfidf_matrix = pickle.load(f)
-with open(f'{persist_directory}/tfidf_vectorizer.pkl', 'rb') as file:
-    loaded_vectorizer = pickle.load(file)
+    model.alpha -= 0.002
+    model.min_alpha = model.alpha
 
-# feature_names = vectorizer.get_feature_names_out() #시각화
-# df_tfidf = pd.DataFrame(tfidf_matrix.toarray(), columns=feature_names)#시각화
+model.random.seed(9999)
 
-# print(df_tfidf) #pdf 문장들 vectorizing 결과
-
-query = "코로나바이러스-19란 무엇인가요?"
+query = "양보차로 설치"
 new_query = sentence_tokenizing(query)
-query_vector = loaded_vectorizer.transform([new_query])
+inferred_vector = model.infer_vector(new_query)
+return_docs = model.docvecs.most_similar(positive=[inferred_vector], topn=5)
 
-# query_feature_names = vectorizer.get_feature_names_out()#시각화
-# df_tfidf_query = pd.DataFrame(query_vector.toarray(), columns=query_feature_names)#시각화
-
-
-
-#유사성 계산
-similarity_scores = cosine_similarity(tfidf_matrix, query_vector)
-result_index = find_highest_doc_index(similarity_scores)
-print(f"내용: {origin_content[result_index]}\n")
-print(f"소스: {source[result_index]}\n")
-print(f"점수: {similarity_scores[result_index]}")
-print(f"전체점수: {similarity_scores}")
-
+for rd in return_docs:
+    index = int(rd[0])
+    print(f"문서내용: {origin_content[index]}\n")
+    print(f"점수: {rd[1]}")
 

@@ -17,17 +17,16 @@ from .embedding import Embedding_Document
 
 #"beomi/llama-2-ko-7b"
 #"jhgan/ko-sroberta-multitask"
-#"/prj/out/exp_finetune"
-#"beomi/kcbert-base"
+
 
 class Set_LocalModel:
     def __init__(self):
         self.model = "beomi/llama-2-ko-7b"
-        self.embedd_model = "/prj/out/exp_finetune"
         self.chat_history = []
         self.context = ""
         self.doc_embedd = Embedding_Document(
-            save_vector_dir = "/prj/src/tf_data_store"
+            save_tfvector_dir = "/prj/src/tf_data_store",
+            save_doc2vec_dir = "/prj/src/doc2vec_data_store"
         )
 
 
@@ -93,6 +92,9 @@ class Set_LocalModel:
         elif embedding_mode == "tf-idf":
             success, e = self.doc_embedd.embedding_tf_idf(pdfs)
 
+        elif embedding_mode == "doc2vec":
+            success, e = self.doc_embedd.embedding_doc2vec(pdfs)
+
 
         return success, e
 
@@ -100,6 +102,8 @@ class Set_LocalModel:
     def search_doc(self, query, k, embedding_mode="bert"):
         if embedding_mode == "tf-idf":
             content, source, page, score = self.doc_embedd.tf_idf_search_doc(query, k)
+        elif embedding_mode == "doc2vec":
+            content, source, page, score = self.doc_embedd.doc2vec_search_doc(query, k)
 
         return content, source, page, score
 

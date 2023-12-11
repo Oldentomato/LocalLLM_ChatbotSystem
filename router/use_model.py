@@ -6,7 +6,8 @@ import queue
 from pydantic import BaseModel
 from fastapi import Form
 from src.modules import Set_LocalModel
-from typing import List
+from typing import List,Optional
+
 
 usemodel = APIRouter()
 local_model = Set_LocalModel()
@@ -51,7 +52,7 @@ def chat_llama(query):
 
 
 @usemodel.post("/pdfembedding")
-async def embedding(pdfs: List[UploadFile], mode: str = "tf-idf"):
+async def embedding(pdfs: List[UploadFile], mode: str = Form(...)):
     files = []
     for pdf in pdfs:
         with open("./upload/"+pdf.filename, "wb") as f:
@@ -62,7 +63,7 @@ async def embedding(pdfs: List[UploadFile], mode: str = "tf-idf"):
 
 
 @usemodel.post("/searchdoc")
-async def search_doc(query: str = Form(...), doc_count: int = 1, mode: str = "tf-idf"):
+async def search_doc(query: str = Form(...), doc_count: int = 1, mode: str = Form(...)):
     content, source, page, score = local_model.search_doc(query, doc_count, mode)
     return {"doc": content, "score": score, "source": source, "page": page}
 

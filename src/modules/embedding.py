@@ -14,11 +14,17 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os.path   
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
+
+#"/prj/out/exp_finetune"
+#"beomi/kcbert-base"
 class Embedding_Document:
 
-    def __init__(self, save_vector_dir):
-        self.save_vector_dir = save_vector_dir
+    def __init__(self, save_tfvector_dir, save_doc2vec_dir):
+        self.embedd_model = "/prj/out/exp_finetune"
+        self.save_tfvector_dir = save_tfvector_dir
+        self.save_doc2vec_dir = save_doc2vec_dir
     
     def get_embedding_model(self):
         print("embedding model load")
@@ -44,7 +50,7 @@ class Embedding_Document:
 
     def __split_pages(self, pages):
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size = 500,
+            chunk_size = 1000,
             chunk_overlap  = 0,
             length_function = len,
             is_separator_regex = False,
@@ -148,26 +154,41 @@ class Embedding_Document:
 
         return max_index
 
-    def __sentence_tokenizing(self, query):
+    def __sentence_tokenizing(self, query, mode="string"):
         lemmatizer = Lemmatizer()
+
         t = Okt()
-        lemm_sentence = ''
         stopwords=['의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다']
         query = re.sub(r"[^\uAC00-\uD7A30-9a-zA-Z\s]", "", query)
-        for text in t.pos(query):
-            if text[0] in stopwords:
-                continue
-            result_lemm = self.__find_elements_with_specific_value(lemmatizer.lemmatize(text[0]),text[1]) #0 = 텍스트, 1 = 품사
-            if len(result_lemm) == 0:
-                lemm_sentence += f"{text[0]} "
-            else:
-                # print(result_lemm)
-                lemm_sentence += f"{result_lemm[0]} "
+
+        if mode == "string":
+            lemm_sentence = ''
+            for text in t.pos(query):
+                if text[0] in stopwords:
+                    continue
+                result_lemm = self.__find_elements_with_specific_value(lemmatizer.lemmatize(text[0]),text[1]) #0 = 텍스트, 1 = 품사
+                if len(result_lemm) == 0:
+                    lemm_sentence += f"{text[0]} "
+                else:
+                    # print(result_lemm)
+                    lemm_sentence += f"{result_lemm[0]} "
+        elif mode == "array":
+            lemm_sentence = []
+            for text in t.pos(query):
+                if text[0] in stopwords:
+                    continue
+                result_lemm = self.__find_elements_with_specific_value(lemmatizer.lemmatize(text[0]),text[1]) #0 = 텍스트, 1 = 품사
+                if len(result_lemm) == 0:
+                    lemm_sentence.append(text[0])
+                else:
+                    lemm_sentence.append(result_lemm[0])
 
         return lemm_sentence
-    
-    def embedding_tf_idf(self, pdf_files):
+
+
+    def embedding_doc2vec(self, pdf_files):
         try:
+            print("doc2vec embedding")
             print("read_pdfs")
             pages = self.__read_pdfs(pdf_files)
             print("split_pdfs")
@@ -175,16 +196,89 @@ class Embedding_Document:
 
             content = []
             source = []
-
-            if os.path.isfile(f'{self.save_vector_dir}/content.pkl'):
-                with open(f'{self.save_vector_dir}/content.pkl', 'rb') as f:
-                    content = pickle.load(f)
-
-            print(content)
             origin_content = []
+
+            if os.path.isfile(f'{self.save_doc2vec_dir}/content.pkl'):
+                with open(f'{self.save_doc2vec_dir}/content.pkl', 'rb') as f:
+                    load_doc_info = pickle.load(f)
+                    content = load_doc_info["content"]
+                    origin_content = load_doc_info["origin_content"]
+                    source = load_doc_info["source"]
+
             for text in texts:
                 origin_content.append(text.page_content)
-                result_sentence = self.__sentence_tokenizing(text.page_content)
+                result_sentence = self.__sentence_tokenizing(text.page_content,"array")
+                content.append(result_sentence)
+                source.append((text.metadata['source'],text.metadata['page']))
+
+            tagged_data = [TaggedDocument(words=content, tags=[str(id)]) for id, content in enumerate(content)]
+
+            max_epochs = 10
+
+            model = Doc2Vec(
+                window=20, #모델 학습할 때 앞뒤로 보는 단어의 수
+                vector_size=300, #벡터 차원의 크기
+                alpha=0.025, #lr
+                min_alpha=0.025,
+                min_count=5, #학습에 사용할 최소 단어 빈도 수
+                dm=1, #학습방법 1=PV-DM, 0=PV_DBOW
+                negative=5, #Complexity Reduction 방법, negative sampling
+                seed=9999
+            )
+
+            model.build_vocab(tagged_data)
+
+            for epoch in range(max_epochs):
+                print(f'iteration {epoch}')
+                model.train(tagged_data, 
+                            total_examples=model.corpus_count,
+                            epochs=max_epochs)
+
+                model.alpha -= 0.002
+                model.min_alpha = model.alpha
+
+            doc_info = {
+                "content": content,
+                "origin_content": origin_content,
+                "source": source
+            }
+
+            #save
+            with open(f'{self.save_doc2vec_dir}/content.pkl', 'wb') as f:
+                pickle.dump(doc_info, f)
+            with open(f'{self.save_doc2vec_dir}/model.pkl', 'wb') as f:
+                pickle.dump(model, f)
+        except Exception as e:
+            print(f"error:{e}")
+            return False, e
+
+        return True, None
+
+
+    
+    def embedding_tf_idf(self, pdf_files):
+        try:
+            print("tf-idf embedding")
+            print("read_pdfs")
+            pages = self.__read_pdfs(pdf_files)
+            print("split_pdfs")
+            texts = self.__split_pages(pages)
+
+            content = []
+            source = []
+            origin_content = []
+
+            if os.path.isfile(f'{self.save_tfvector_dir}/content.pkl'):
+                with open(f'{self.save_tfvector_dir}/content.pkl', 'rb') as f:
+                    load_doc_info = pickle.load(f)
+                    content = load_doc_info["content"]
+                    origin_content = load_doc_info["origin_content"]
+                    source = load_doc_info["source"]
+
+            
+            for text in texts:
+                origin_content.append(text.page_content)
+                result_sentence = self.__sentence_tokenizing(text.page_content,"string")
                 content.append(result_sentence)
                 source.append((text.metadata['source'],text.metadata['page']))
 
@@ -198,11 +292,11 @@ class Embedding_Document:
             }
             
             # # save
-            with open(f'{self.save_vector_dir}/content.pkl', 'wb') as f:
+            with open(f'{self.save_tfvector_dir}/content.pkl', 'wb') as f:
                 pickle.dump(doc_info, f)
-            with open(f'{self.save_vector_dir}/test2.pkl', 'wb') as f:
+            with open(f'{self.save_tfvector_dir}/test2.pkl', 'wb') as f:
                 pickle.dump(tfidf_matrix, f)
-            with open(f'{self.save_vector_dir}/tfidf_vectorizer.pkl', 'wb') as file:
+            with open(f'{self.save_tfvector_dir}/tfidf_vectorizer.pkl', 'wb') as file:
                 pickle.dump(vectorizer, file)
         except Exception as e:
             print(f"error:{e}")
@@ -211,14 +305,35 @@ class Embedding_Document:
         return True, None
         
 
+    def doc2vec_search_doc(self, query, k):
+        with open(f'{self.save_doc2vec_dir}/model.pkl', 'rb') as f:
+            model = pickle.load(f)
+        with open(f'{self.save_doc2vec_dir}/content.pkl', 'rb') as file:
+            doc_info = pickle.load(file)
+
+        model.random.seed(9999)
+
+        new_query = self.__sentence_tokenizing(query, "array")
+        inferred_vector = model.infer_vector(new_query)
+        return_docs = model.docvecs.most_similar(positive=[inferred_vector], topn=k)
+
+        origin_content = doc_info["origin_content"]
+        source = doc_info["source"]
+        index = int(return_docs[0][0])
+
+        # print(f"문서내용: {origin_content[index]}\n")
+        # print(f"점수: {return_docs[0][1]}")
+
+        return origin_content[index], source[index][0], source[index][1], return_docs[0][1] 
+
 
 
     def tf_idf_search_doc(self, query, k):
-        with open(f'{self.save_vector_dir}/test2.pkl', 'rb') as f:
+        with open(f'{self.save_tfvector_dir}/test2.pkl', 'rb') as f:
             tfidf_matrix = pickle.load(f)
-        with open(f'{self.save_vector_dir}/tfidf_vectorizer.pkl', 'rb') as file:
+        with open(f'{self.save_tfvector_dir}/tfidf_vectorizer.pkl', 'rb') as file:
             loaded_vectorizer = pickle.load(file)
-        with open(f'{self.save_vector_dir}/content.pkl', 'rb') as file:
+        with open(f'{self.save_tfvector_dir}/content.pkl', 'rb') as file:
             doc_info = pickle.load(file)
 
 
@@ -226,15 +341,15 @@ class Embedding_Document:
         # content = doc_info["content"]
         source = doc_info["source"]
 
-        new_query = self.__sentence_tokenizing(query)
+        new_query = self.__sentence_tokenizing(query, "string")
         query_vector = loaded_vectorizer.transform([new_query])
 
         similarity_scores = cosine_similarity(tfidf_matrix, query_vector)
         result_index = self.__find_highest_doc_index(similarity_scores)
 
-        print(origin_content[result_index])
-        print(source[result_index])
-        print(similarity_scores[result_index])
+        # print(origin_content[result_index])
+        # print(source[result_index])
+        # print(similarity_scores[result_index])
 
         return origin_content[result_index], source[result_index][0], source[result_index][1], similarity_scores[result_index][0]
 
