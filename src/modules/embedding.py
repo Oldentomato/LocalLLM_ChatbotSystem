@@ -17,6 +17,7 @@ import os.path
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
 
+
 #"/prj/out/exp_finetune"
 #"beomi/kcbert-base"
 class Embedding_Document:
@@ -221,7 +222,7 @@ class Embedding_Document:
                 alpha=0.025, #lr
                 min_alpha=0.025,
                 min_count=5, #학습에 사용할 최소 단어 빈도 수
-                dm=1, #학습방법 1=PV-DM, 0=PV_DBOW
+                dm=0, #학습방법 1=PV-DM, 0=PV_DBOW
                 negative=5, #Complexity Reduction 방법, negative sampling
                 seed=9999
             )
@@ -246,8 +247,10 @@ class Embedding_Document:
             #save
             with open(f'{self.save_doc2vec_dir}/content.pkl', 'wb') as f:
                 pickle.dump(doc_info, f)
-            with open(f'{self.save_doc2vec_dir}/model.pkl', 'wb') as f:
-                pickle.dump(model, f)
+
+            model.save(f'{self.save_doc2vec_dir}/model.doc2vec')
+            # with open(f'{self.save_doc2vec_dir}/model.pkl', 'wb') as f:
+            #     pickle.dump(model, f)
         except Exception as e:
             print(f"error:{e}")
             return False, e
@@ -306,8 +309,9 @@ class Embedding_Document:
         
 
     def doc2vec_search_doc(self, query, k):
-        with open(f'{self.save_doc2vec_dir}/model.pkl', 'rb') as f:
-            model = pickle.load(f)
+        # with open(f'{self.save_doc2vec_dir}/model.pkl', 'rb') as f:
+        #     model = pickle.load(f)
+        model = Doc2Vec.load(f'{self.save_doc2vec_dir}/model.doc2vec')
         with open(f'{self.save_doc2vec_dir}/content.pkl', 'rb') as file:
             doc_info = pickle.load(file)
 
