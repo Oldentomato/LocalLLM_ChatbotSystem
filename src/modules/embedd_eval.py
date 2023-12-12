@@ -11,21 +11,6 @@ from konlpy.tag import Okt
 import re
 
 
-def Set_Dataset():
-    dataset = load_dataset("squad_kor_v1")
-    num_example = 3
-    contexts_list = []
-    answer_list = []
-
-    for example in tqdm(dataset["validation"][:num_example]):
-        context = example["context"]
-        answer = example["answers"]["text"]
-
-        contexts_list.append(context)
-        answer_list.append(answer)
-
-    return contexts_list, answer_list
-
 def find_elements_with_specific_value(tuple_list, target_value):
     result_list = [t[0] for t in tuple_list if t[1] == target_value]
     return result_list
@@ -60,6 +45,23 @@ def sentence_tokenizing(query, mode="string"):
                 lemm_sentence.append(result_lemm[0])
 
     return lemm_sentence
+
+
+def Set_Dataset():
+    dataset = load_dataset("squad_kor_v1")
+    num_example = 3
+    contexts = []
+    questions = []
+
+    for con, que in zip(dataset["validation"]["context"][:num_example], dataset["validation"]["question"][:num_example]):
+        contexts.append(sentence_tokenizing(con, "string"))
+        questions.append(sentence_tokenizing(que, "string"))
+    
+    # print(contexts)
+    # print(questions)
+    return contexts, questions
+
+
 
 
 def embedding_doc2vec(query):
@@ -100,12 +102,13 @@ def embedding_doc2vec(query):
 
 def embedding_tf_idf(contexts_list, answers_list):
     vectorizer = TfidfVectorizer()
-    contexts_tfidf = vectorizer.fit_transform(contexts_list)
-    answers_tfidf = vectorizer.transform(answers_list)
+    contexts_tfidf = vectorizer.fit_transform(contexts_list).toarray()
+    answers_tfidf = vectorizer.transform(answers_list).toarray()
+
 
     # Perform t-SNE for visualization
-    contexts_tsne = TSNE(n_components=2).fit_transform(contexts_tfidf.toarray())
-    answers_tsne = TSNE(n_components=2).fit_transform(answers_tfidf.toarray())
+    contexts_tsne = TSNE(n_components=2,perplexity=2, n_jobs=1).fit_transform(contexts_tfidf)
+    answers_tsne = TSNE(n_components=2,perplexity=2, n_jobs=1).fit_transform(answers_tfidf)
 
     return contexts_tsne, answers_tsne
 
@@ -128,9 +131,9 @@ def Embedding_Compare(predict_emb_list, true_emb_list):
     plt.show()
 
 
-context, answer = Set_Dataset()
-context_tsne, answer_tsne = embedding_tf_idf(context, answer)
-Embedding_Compare(context_tsne, answer_tsne)
+context, question = Set_Dataset()
+context_tsne, answer_tsne = embedding_tf_idf(context, question)
+Embedding_Compare(context_tsne, question)
 
 
 

@@ -1,5 +1,4 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.document_loaders import PyPDFLoader
 from langchain.chains import LLMChain, ReduceDocumentsChain, MapReduceDocumentsChain
 from .config import OPENAI_API_KEY
@@ -15,6 +14,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os.path   
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+from sentence_transformers import SentenceTransformer, util
+import numpy as np
 
 
 
@@ -22,19 +23,22 @@ from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 #"beomi/kcbert-base"
 class Embedding_Document:
 
-    def __init__(self, save_tfvector_dir, save_doc2vec_dir):
-        self.embedd_model = "/prj/out/exp_finetune"
+    def __init__(self, save_tfvector_dir, save_doc2vec_dir, save_bert_dir):
+        self.embedd_model = "beomi/kcbert-base"
         self.save_tfvector_dir = save_tfvector_dir
         self.save_doc2vec_dir = save_doc2vec_dir
-    
-    def get_embedding_model(self):
-        print("embedding model load")
-        model_kwargs = {'device': 'cuda'}
-        encode_kwargs = {'normalize_embeddings': True}
+        self.save_bert_dir = save_bert_dir
 
-        self.embeddings = HuggingFaceEmbeddings(model_name=self.embedd_model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
-        self.embeddings.client.tokenizer.pad_token = self.embeddings.client.tokenizer.eos_token
-        self.embeddings.client.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        self.embeddings = SentenceTransformer("beomi/kcbert-base")
+    
+    # def __get_embedding_model(self):
+    #     print("embedding model load")
+    #     model_kwargs = {'device': 'cuda'}
+    #     encode_kwargs = {'normalize_embeddings': True}
+
+    #     self.embeddings = HuggingFaceEmbeddings(model_name=self.embedd_model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
+    #     self.embeddings.client.tokenizer.pad_token = self.embeddings.client.tokenizer.eos_token
+    #     self.embeddings.client.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
     def __read_pdfs(self, pdf_files):
         if not pdf_files:
@@ -55,87 +59,42 @@ class Embedding_Document:
             chunk_overlap  = 0,
             length_function = len,
             is_separator_regex = False,
+            separators=["\n\n","\n"]
         )
         texts = text_splitter.split_documents(pages)
         return texts
 
 
 
-    def bert_embedding(self, pdf_files):
-        try:
-            print("read_pdfs")
-            pages = self.__read_pdfs(pdf_files)
-            print("split_pdfs")
-            texts = self.__split_pages(pages)
+    # def bert_embedding(self, pdf_files):
+    #     try:
+    #         print("embedding model load")
+    #         model_kwargs = {'device': 'cuda'}
+    #         encode_kwargs = {'normalize_embeddings': True}
 
-            persist_directory = "/prj/src/data_store" 
-            print("pdf embedding")
-            db = Chroma.from_documents( #chromadb 임베딩된 텍스트 데이터들을 효율적으로 저장하기위한 모듈
-                documents=texts,
-                embedding=self.embeddings,
-                persist_directory=persist_directory)
+    #         embeddings = HuggingFaceEmbeddings(model_name=self.embedd_model, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
+    #         embeddings.client.tokenizer.pad_token = embeddings.client.tokenizer.eos_token
+    #         embeddings.client.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-            print("pdf embedd and saved")
-            print("document summaring")
-            print(f"총 분할된 도큐먼트 수: {len(texts)}")
-            
+    #         print("read_pdfs")
+    #         pages = self.__read_pdfs(pdf_files)
+    #         print("split_pdfs")
+    #         texts = self.__split_pages(pages)
 
-            # Map 단계에서 처리할 프롬프트 정의
-            # 분할된 문서에 적용할 프롬프트 내용을 기입합니다.
-            # 여기서 {pages} 변수에는 분할된 문서가 차례대로 대입되니다.
-            map_template = """다음은 문서 중 일부 내용입니다.
-            {pages}
-            이 문서 목록을 기반으로 주요 내용을 요약해 주세요.
-            답변:"""
-            map_prompt = PromptTemplate.from_template(map_template)
-            llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo", openai_api_key=OPENAI_API_KEY)
-            map_chain = LLMChain(llm=llm, prompt=map_prompt)
+    #         persist_directory = "/prj/src/data_store" 
+    #         print("pdf embedding")
+    #         db = Chroma.from_documents( #chromadb 임베딩된 텍스트 데이터들을 효율적으로 저장하기위한 모듈
+    #             documents=texts,
+    #             embedding=embeddings,
+    #             persist_directory=persist_directory)
 
-            # Reduce 단계에서 처리할 프롬프트 정의
-            reduce_template = """다음은 요약의 집합입니다.:
-            {doc_summaries}
-            이것들을 바탕으로 통합된 요약을 만들어 주세요.
-            답변:"""
-            reduce_prompt = PromptTemplate.from_template(reduce_template)
+    #         print("pdf embedd and saved")
 
-            reduce_chain = LLMChain(llm=llm, prompt=reduce_prompt)
-
-            # 문서의 목록을 받아들여, 이를 단일 문자열로 결합하고, 이를 LLMChain에 전달합니다.
-            combine_documents_chain = StuffDocumentsChain(
-                llm_chain=reduce_chain,
-                document_variable_name="doc_summaries"
-            )
-
-            # Map 문서를 통합하고 순차적으로 Reduce합니다.
-            reduce_documents_chain = ReduceDocumentsChain(
-                # 호출되는 최종 체인입니다.
-                combine_documents_chain=combine_documents_chain,
-                # 문서가 `StuffDocumentsChain`의 컨텍스트를 초과하는 경우
-                collapse_documents_chain=combine_documents_chain,
-                # 문서를 그룹화할 때의 토큰 최대 개수입니다.
-                token_max=4000,
-            )
-
-            # 문서들에 체인을 매핑하여 결합하고, 그 다음 결과들을 결합합니다.
-            map_reduce_chain = MapReduceDocumentsChain(
-                # Map 체인
-                llm_chain=map_chain,
-                # Reduce 체인
-                reduce_documents_chain=reduce_documents_chain,
-                # 문서를 넣을 llm_chain의 변수 이름(map_template 에 정의된 변수명)
-                document_variable_name="pages",
-                # 출력에서 매핑 단계의 결과를 반환합니다.
-                return_intermediate_steps=False,
-            )
-
-            self.summary = map_reduce_chain.run(texts)
-            print(f"pdf문서 요약: {self.summary}")
-
-            return True, None
-        except Exception as e:
-            print("error to embedding")
-            print(f"error_msg: {e}")
-            return False, e
+    #         return True, None
+    #     except Exception as e:
+    #         print("error to embedding")
+    #         print(f"error_msg: {e}")
+    #         return False, e
         
 
     def __find_elements_with_specific_value(self, tuple_list, target_value):
@@ -258,7 +217,60 @@ class Embedding_Document:
         return True, None
 
 
-    
+
+    def embedding_bert(self, pdf_files):
+        try:
+            print("bert embedding")
+            print("read_pdfs")
+            pages = self.__read_pdfs(pdf_files)
+            print("split_pdfs")
+            texts = self.__split_pages(pages)
+
+            content = []
+            source = []
+            origin_content = []
+            content_vectors= []
+
+            if os.path.isfile(f'{self.save_bert_dir}/content.pkl'):
+                with open(f'{self.save_bert_dir}/content.pkl', 'rb') as f:
+                    load_doc_info = pickle.load(f)
+                    content = load_doc_info["content"]
+                    origin_content = load_doc_info["origin_content"]
+                    source = load_doc_info["source"]   
+
+            # if os.path.isfile(f'{self.save_bert_dir}/contentvector.pkl'):
+            #     with open(f'{self.save_bert_dir}/contentvector.pkl', 'rb') as f:
+            #         content_vectors = pickle.load(f)
+
+            for text in texts:
+                origin_content.append(text.page_content)
+                result_sentence = self.__sentence_tokenizing(text.page_content,"string")
+                content.append(result_sentence)
+                source.append((text.metadata['source'],text.metadata['page']))
+
+            for sentence in content:
+                vectors = self.embeddings.encode(sentence)
+                content_vectors.append(vectors)
+
+
+            doc_info = {
+                "content": content,
+                "origin_content": origin_content,
+                "source": source
+            }
+
+            with open(f'{self.save_bert_dir}/content.pkl', 'wb') as f:
+                pickle.dump(doc_info, f)
+            with open(f'{self.save_bert_dir}/contentvector.pkl', 'wb') as f:
+                pickle.dump(content_vectors, f)
+        except Exception as e:
+            print(f"error:{e}")
+            return False, e
+        
+        return True, None
+
+
+
     def embedding_tf_idf(self, pdf_files):
         try:
             print("tf-idf embedding")
@@ -293,6 +305,7 @@ class Embedding_Document:
                 "origin_content": origin_content,
                 "source": source
             }
+
             
             # # save
             with open(f'{self.save_tfvector_dir}/content.pkl', 'wb') as f:
@@ -307,6 +320,28 @@ class Embedding_Document:
         
         return True, None
         
+
+    def bert_search_doc(self, query, k):
+        with open(f'{self.save_bert_dir}/contentvector.pkl', 'rb') as f:
+            contentvector = pickle.load(f)
+        with open(f'{self.save_bert_dir}/content.pkl', 'rb') as file:
+            doc_info = pickle.load(file)
+
+        origin_content = doc_info["origin_content"]
+        # content = doc_info["content"]
+        source = doc_info["source"]
+
+        new_query = self.__sentence_tokenizing(query, "string")
+        query_vector = self.embeddings.encode([new_query])
+
+        similarity_scores = cosine_similarity(contentvector, query_vector)
+
+        # result_index = self.__find_highest_doc_index(similarity_scores)
+        result_index = similarity_scores.argmax()
+
+        return origin_content[result_index], source[result_index][0], source[result_index][1], float(similarity_scores[result_index][0])
+
+
 
     def doc2vec_search_doc(self, query, k):
         # with open(f'{self.save_doc2vec_dir}/model.pkl', 'rb') as f:

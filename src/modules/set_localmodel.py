@@ -26,7 +26,8 @@ class Set_LocalModel:
         self.context = ""
         self.doc_embedd = Embedding_Document(
             save_tfvector_dir = "/prj/src/tf_data_store",
-            save_doc2vec_dir = "/prj/src/doc2vec_data_store"
+            save_doc2vec_dir = "/prj/src/doc2vec_data_store",
+            save_bert_dir = "/prj/src/bert_data_store"
         )
 
 
@@ -87,8 +88,7 @@ class Set_LocalModel:
 
     def pdf_embedding(self, pdfs, embedding_mode="tf-idf"):
         if embedding_mode == "bert":
-            self.doc_embedd
-            return
+            success, e = self.doc_embedd.embedding_bert(pdfs)
         elif embedding_mode == "tf-idf":
             success, e = self.doc_embedd.embedding_tf_idf(pdfs)
 
@@ -104,6 +104,9 @@ class Set_LocalModel:
             content, source, page, score = self.doc_embedd.tf_idf_search_doc(query, k)
         elif embedding_mode == "doc2vec":
             content, source, page, score = self.doc_embedd.doc2vec_search_doc(query, k)
+        elif embedding_mode == "bert":
+            content, source, page, score = self.doc_embedd.bert_search_doc(query, k)
+
 
         return content, source, page, score
 
