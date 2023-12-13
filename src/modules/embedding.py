@@ -12,7 +12,7 @@ import os.path
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
-
+import numpy as np
 
 
 #"/prj/out/exp_finetune"
@@ -377,7 +377,7 @@ class Embedding_Document:
 
         new_query = self.__sentence_tokenizing(query, "array")
         scores = bm25.get_scores(new_query)
-        max_score_index = scores.index(max(scores))
+        max_score_index = scores.argmax()
 
 
         return origin_content[max_score_index], source[max_score_index][0], source[max_score_index][1], scores[max_score_index]
@@ -425,6 +425,74 @@ class Embedding_Document:
         # print(f"점수: {return_docs[0][1]}")
 
         return origin_content[index], source[index][0], source[index][1], return_docs[0][1] 
+
+
+    def search_doc_bm_bert(self, query, k, alpha=0.9):
+        def softmax(x):
+            e_x = np.exp(x - np.max(x))
+            return e_x / e_x.sum(axis=0)
+
+
+        with open(f'{self.save_bm25_dir}/bmvector.pkl', 'rb') as file:
+            bm25 = pickle.load(file)
+        with open(f'{self.save_bm25_dir}/content.pkl', 'rb') as file:
+            doc_info = pickle.load(file)
+
+
+        origin_content = doc_info["origin_content"]
+        # content = doc_info["content"]
+        source = doc_info["source"]
+
+        arr_new_query = self.__sentence_tokenizing(query, "array")
+        str_new_query = self.__sentence_tokenizing(query, "string")
+        doc_scores = bm25.get_scores(arr_new_query)
+        doc_scores = softmax(doc_scores)
+        document_idx = np.argpartition(-doc_scores, range(k))[0:k]
+        # top_documents = [origin_content[i] for i in document_idx]
+        doc_scores = [doc_scores[i] for i in document_idx]
+
+        #rerank
+        top_content = []
+        top_source = []
+        top_vector = []
+
+
+        if os.path.isfile(f'{self.save_bert_dir}/content.pkl') and os.path.isfile(f'{self.save_bert_dir}/contentvector.pkl'):
+            with open(f'{self.save_bert_dir}/content.pkl', 'rb') as f:
+                load_doc_info = pickle.load(f)
+                content = load_doc_info["content"]
+                origin_content = load_doc_info["origin_content"]
+                source = load_doc_info["source"]   
+            with open(f'{self.save_bert_dir}/contentvector.pkl', 'rb') as f:
+                contentvector = pickle.load(f)
+        else:
+            raise Exception("No Bert Datas!!")
+
+        for id in document_idx:
+            top_content.append(content[id])
+            top_vector.append(contentvector[id])
+            top_source.append(source[id])
+
+
+        query_vector = self.embeddings.encode([str_new_query])
+
+        similarity_scores = cosine_similarity(query_vector, contentvector)
+
+        similarity_scores = softmax(similarity_scores)
+        result_scores = (1-alpha)*np.array(doc_scores) + alpha*similarity_scores
+        top_results = np.argpartition(-result_scores, range(k))[0:k]
+        print(result_scores)
+        print(top_results)
+        rerank_documents = [top_content[i] for i in top_results]
+        rerank_scores = [results_scores[i] for i in top_results]
+
+
+        print(rerank_documents)
+        
+        return rerank_documents[0], "", "", rerank_scores[0]
+
+        
+        
 
 
 

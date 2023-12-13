@@ -111,6 +111,8 @@ class Set_LocalModel:
             content, source, page, score = self.doc_embedd.bert_search_doc(query, k)
         elif embedding_mode == "bm25":
             content, source, page, score = self.doc_embedd.bm25_search_doc(query, k)
+        elif embedding_mode == "bmbert":
+            content, source, page, score = self.doc_embedd.search_doc_bm_bert(query, k)
 
 
         return content, source, page, score
