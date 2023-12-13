@@ -18,7 +18,7 @@ cd mecab-ko-dic-2.1.1-20180720
 make
 make install
 
-(test)mecab -d /usr/local/lib/mecab/dic/mecab-ko-dic 
+(optional test)mecab -d /usr/local/lib/mecab/dic/mecab-ko-dic 
 curl -s https://raw.githubusercontent.com/konlpy/konlpy/master/scripts/mecab.sh
 pip install mecab-python
 pip install nltk

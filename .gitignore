@@ -8,3 +8,4 @@ upload/
 */tf_data_store
 */doc2vec_data_store
 */bert_data_store
+*/bm25_data_store

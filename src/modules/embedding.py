@@ -1,11 +1,7 @@
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.document_loaders import PyPDFLoader
-from langchain.chains import LLMChain, ReduceDocumentsChain, MapReduceDocumentsChain
 from .config import OPENAI_API_KEY
-from langchain.chat_models import ChatOpenAI
-from langchain.chains.combine_documents.stuff import StuffDocumentsChain
 from langchain.vectorstores import Chroma
-from langchain.prompts import PromptTemplate
 import pickle
 from soylemma import Lemmatizer
 from konlpy.tag import Okt
@@ -14,8 +10,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os.path   
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
-from sentence_transformers import SentenceTransformer, util
-import numpy as np
+from sentence_transformers import SentenceTransformer
+from rank_bm25 import BM25Okapi
 
 
 
@@ -23,11 +19,12 @@ import numpy as np
 #"beomi/kcbert-base"
 class Embedding_Document:
 
-    def __init__(self, save_tfvector_dir, save_doc2vec_dir, save_bert_dir):
+    def __init__(self, save_tfvector_dir, save_doc2vec_dir, save_bert_dir, save_bm25_dir):
         self.embedd_model = "beomi/kcbert-base"
         self.save_tfvector_dir = save_tfvector_dir
         self.save_doc2vec_dir = save_doc2vec_dir
         self.save_bert_dir = save_bert_dir
+        self.save_bm25_dir = save_bm25_dir
 
         self.embeddings = SentenceTransformer("beomi/kcbert-base")
     
@@ -319,7 +316,71 @@ class Embedding_Document:
             return False, e
         
         return True, None
+    
+    def bm25_embedding(self, pdf_files):
+        try:
+            print("bm25-idf embedding")
+            print("read_pdfs")
+            pages = self.__read_pdfs(pdf_files)
+            print("split_pdfs")
+            texts = self.__split_pages(pages)
+
+            content = []
+            source = []
+            origin_content = []
+
+            if os.path.isfile(f'{self.save_bm25_dir}/content.pkl'):
+                with open(f'{self.save_bm25_dir}/content.pkl', 'rb') as f:
+                    load_doc_info = pickle.load(f)
+                    content = load_doc_info["content"]
+                    origin_content = load_doc_info["origin_content"]
+                    source = load_doc_info["source"]
+
+            for text in texts:
+                origin_content.append(text.page_content)
+                result_sentence = self.__sentence_tokenizing(text.page_content,"array")
+                content.append(result_sentence)
+                source.append((text.metadata['source'],text.metadata['page']))
+
+            doc_info = {
+                "content": content,
+                "origin_content": origin_content,
+                "source": source
+            }
+
+
+            bm25 = BM25Okapi(content)
+
+            # # save
+            with open(f'{self.save_bm25_dir}/content.pkl', 'wb') as f:
+                pickle.dump(doc_info, f)
+            with open(f'{self.save_bm25_dir}/bmvector.pkl', 'wb') as file:
+                pickle.dump(bm25, file)
+
+        except Exception as e:
+            print(f"error:{e}")
+            return False, e
         
+        return True, None    
+
+
+    def bm25_search_doc(self, query, k):
+        with open(f'{self.save_bm25_dir}/bmvector.pkl', 'rb') as file:
+            bm25 = pickle.load(file)
+        with open(f'{self.save_bm25_dir}/content.pkl', 'rb') as file:
+            doc_info = pickle.load(file)
+
+
+        origin_content = doc_info["origin_content"]
+        # content = doc_info["content"]
+        source = doc_info["source"]
+
+        new_query = self.__sentence_tokenizing(query, "array")
+        scores = bm25.get_scores(new_query)
+        max_score_index = scores.index(max(scores))
+
+
+        return origin_content[max_score_index], source[max_score_index][0], source[max_score_index][1], scores[max_score_index]
 
     def bert_search_doc(self, query, k):
         with open(f'{self.save_bert_dir}/contentvector.pkl', 'rb') as f:

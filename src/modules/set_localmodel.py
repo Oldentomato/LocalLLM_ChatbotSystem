@@ -9,8 +9,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain.prompts.chat import (
     ChatPromptTemplate,
     SystemMessagePromptTemplate,
-    HumanMessagePromptTemplate,
-    MessagesPlaceholder
+    HumanMessagePromptTemplate
 )
 from .embedding import Embedding_Document
 
@@ -27,7 +26,8 @@ class Set_LocalModel:
         self.doc_embedd = Embedding_Document(
             save_tfvector_dir = "/prj/src/tf_data_store",
             save_doc2vec_dir = "/prj/src/doc2vec_data_store",
-            save_bert_dir = "/prj/src/bert_data_store"
+            save_bert_dir = "/prj/src/bert_data_store",
+            save_bm25_dir = "/prj/src/bm25_data_store"
         )
 
 
@@ -95,6 +95,9 @@ class Set_LocalModel:
         elif embedding_mode == "doc2vec":
             success, e = self.doc_embedd.embedding_doc2vec(pdfs)
 
+        elif embedding_mode == "bm25":
+            success, e = self.doc_embedd.bm25_embedding(pdfs)
+
 
         return success, e
 
@@ -106,13 +109,15 @@ class Set_LocalModel:
             content, source, page, score = self.doc_embedd.doc2vec_search_doc(query, k)
         elif embedding_mode == "bert":
             content, source, page, score = self.doc_embedd.bert_search_doc(query, k)
+        elif embedding_mode == "bm25":
+            content, source, page, score = self.doc_embedd.bm25_search_doc(query, k)
 
 
         return content, source, page, score
 
     
 
-    def run_QA(self, g, question, embedding_mode="bert"):
+    def run_QA(self, g, question, embedding_mode="bm25"):
         try:
             db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
             db.get() 
