@@ -63,7 +63,7 @@ async def embedding(pdfs: List[UploadFile], mode: str = Form(...)):
 
 
 @usemodel.post("/searchdoc")
-async def search_doc(query: str = Form(...), doc_count: int = 1, mode: str = Form(...)):
+async def search_doc(query: str = Form(...), doc_count: int = 5, mode: str = Form(...)):
     content, source, page, score = local_model.search_doc(query, doc_count, mode)
     return {"doc": content, "score": score, "source": source, "page": page}
 

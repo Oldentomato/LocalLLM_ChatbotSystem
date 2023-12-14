@@ -9,7 +9,15 @@ from tqdm import tqdm
 from soylemma import Lemmatizer
 from konlpy.tag import Okt
 import re
+from sentence_transformers import SentenceTransformer
+from rank_bm25 import BM25Okapi
 
+#jhgan/ko-sroberta-multitask
+#beomi/kcbert-base
+#BM-K/KoSimCSE-roberta-multitask
+def Get_Embedding():
+    embeddings = SentenceTransformer('BM-K/KoSimCSE-roberta-multitask')
+    return embeddings
 
 def find_elements_with_specific_value(tuple_list, target_value):
     result_list = [t[0] for t in tuple_list if t[1] == target_value]
@@ -48,92 +56,104 @@ def sentence_tokenizing(query, mode="string"):
 
 
 def Set_Dataset():
+    #squad_kor_v1 = Train: 60407 Validation: 5774
     dataset = load_dataset("squad_kor_v1")
-    num_example = 3
+    num_example = 5000
     contexts = []
     questions = []
 
     for con, que in zip(dataset["validation"]["context"][:num_example], dataset["validation"]["question"][:num_example]):
-        contexts.append(sentence_tokenizing(con, "string"))
-        questions.append(sentence_tokenizing(que, "string"))
+        contexts.append(con)
+        questions.append(que)
     
     # print(contexts)
     # print(questions)
     return contexts, questions
 
+def mrr_measure(predict_list):
+    score = 0
+    for predict in predict_list:
+        if 1 not in predict:
+            continue
+        score += 1 / (predict.index(1) + 1)
 
+    return score / len(predict_list)
 
+def top_N_precision(predict_list, k):
+    c, m = [0] * k, 0
+    for idx, predict in enumerate(predict_list):
+        if 1 in predict:
+            c[predict.index(1)] += 1
 
-def embedding_doc2vec(query):
-    content = []
+        m += 1
+    top_n_precision = [sum(c[:idx + 1]) / m for idx, e in enumerate(c)]
 
-    tagged_data = [TaggedDocument(words=content, tags=[str(id)]) for id, content in enumerate(content)]
-
-    max_epochs = 10
-
-    model = Doc2Vec(
-        window=20, #모델 학습할 때 앞뒤로 보는 단어의 수
-        vector_size=300, #벡터 차원의 크기
-        alpha=0.025, #lr
-        min_alpha=0.025,
-        min_count=5, #학습에 사용할 최소 단어 빈도 수
-        dm=0, #학습방법 1=PV-DM, 0=PV_DBOW
-        negative=5, #Complexity Reduction 방법, negative sampling
-        seed=9999
-    )
-
-    model.build_vocab(tagged_data)
-
-    for epoch in range(max_epochs):
-        print(f'iteration {epoch}')
-        model.train(tagged_data, 
-                    total_examples=model.corpus_count,
-                    epochs=max_epochs)
-
-        model.alpha -= 0.002
-        model.min_alpha = model.alpha
-
-    new_query = sentence_tokenizing(query, "array")
-    inferred_vector = model.infer_vector(new_query)
-
-    return inferred_vector
-
-
-
-def embedding_tf_idf(contexts_list, answers_list):
-    vectorizer = TfidfVectorizer()
-    contexts_tfidf = vectorizer.fit_transform(contexts_list).toarray()
-    answers_tfidf = vectorizer.transform(answers_list).toarray()
-
-
-    # Perform t-SNE for visualization
-    contexts_tsne = TSNE(n_components=2,perplexity=2, n_jobs=1).fit_transform(contexts_tfidf)
-    answers_tsne = TSNE(n_components=2,perplexity=2, n_jobs=1).fit_transform(answers_tfidf)
-
-    return contexts_tsne, answers_tsne
-
-
-def Embedding_Compare(predict_emb_list, true_emb_list):
-    embeddings_tsne = [TSNE(n_components=2).fit_transform(embedding) for embedding in predict_emb_list]
-
-    plt.figure(figsize=(15,6))
-
-    for i, (tsne_result, answer) in enumerate(zip(embeddings_tsne, true_emb_list)):
-        plt.subplot(1,3, i+1)
-        plt.scatter(tsne_result[:, 0], tsne_result[:, 1], label=f'Embedding Model {i+1}', color=f'C{i}')
-        plt.title(f'Embedding Model {i+1}')
-
-        cos_similarity = cosine_similarity(tsne_result, answer.reshape(1,-1))
-        avg_cos_similarity = np.mean(cos_similarity)
-
-        print(f'Embedding Model {i+1}과의 평균 코사인 유사도: {avg_cos_similarity}')
+    return top_n_precision
     
-    plt.show()
+def reranking(embeddings, query, top_documents, doc_score, k):
+    query_vector = embeddings.encode([query])
+    corpus_embeddings = embeddings.encode(top_documents)
+    similarity_scores = cosine_similarity(query_vector, corpus_embeddings)
+
+    result_scores = similarity_scores[0]
+    top_results = np.argpartition(-result_scores, range(k))[0:k]
+    rerank_documents = [top_documents[i] for i in top_results]
+    rerank_scores = [result_scores[i] for i in top_results]
+
+    return rerank_scores, rerank_documents
 
 
-context, question = Set_Dataset()
-context_tsne, answer_tsne = embedding_tf_idf(context, question)
-Embedding_Compare(context_tsne, question)
+def Search(bm25, contexts, query, k):
+    arr_new_query = sentence_tokenizing(query, "array")
+    doc_scores = bm25.get_scores(arr_new_query)
+    document_idx = np.argpartition(-doc_scores, range(k))[0:k]
+    top_documents = [contexts[i] for i in document_idx]
+    doc_scores = [doc_scores[i] for i in document_idx]
+
+    return top_documents, doc_scores
+
+
+def evaluate(k):
+    #top_documents는 토크나이징 안한 평문임
+    bmbert_predict_lists = []
+    bm_predict_lists = []
+    embedding = Get_Embedding()
+    
+    contexts, questions = Set_Dataset()
+    token_context = []
+    for con in tqdm(contexts):
+        arr_new_query = sentence_tokenizing(con, "array")
+        token_context.append(arr_new_query)
+
+    bm25 = BM25Okapi(token_context)
+
+    for q,a in tqdm(zip(questions, contexts)):
+        bm_top_documents, doc_score = Search(bm25, contexts, q, k)
+        _, top_documents = reranking(embedding, q, bm_top_documents, doc_score, k)
+
+        bool_documents = [0]*k
+        for idx, document in enumerate(top_documents):
+            bool_documents[idx] = int(a == document)
+
+        bmbert_predict_lists.append(bool_documents)
+
+        bool_documents = [0]*k
+        for idx, document in enumerate(bm_top_documents):
+            bool_documents[idx] = int(a == document)
+
+        bm_predict_lists.append(bool_documents)
+
+        
+
+    print('BMBERT MRR Score : ', mrr_measure(bmbert_predict_lists))
+    print('BMBERT Top10 Precision Score : ',top_N_precision(bmbert_predict_lists, k))
+    print('BM25 MRR Score : ', mrr_measure(bm_predict_lists))
+    print('BM25 Top10 Precision Score : ',top_N_precision(bm_predict_lists, k))
+
+
+if __name__ == "__main__":
+    evaluate(k=10)
+
 
 
 

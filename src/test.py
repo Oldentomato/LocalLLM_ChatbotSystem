@@ -53,22 +53,12 @@ def sentence_tokenizing(query, mode="string"):
 
     return lemm_sentence
 
-# while(1):
-#     query = input("query: ")
-#     if query == "stop":
-#         break
+while(1):
+    query = input("query: ")
+    if query == "stop":
+        break
 
-#     result = sentence_tokenizing(query, "array")
+    result = sentence_tokenizing(query, "array")
 
-#     print(result)
+    print(result)
 
-chroma_client = chromadb.EphemeralClient()
-
-embeddings = SentenceTransformer("beomi/kcbert-base")
-# embeddings.client.tokenizer.pad_token = embeddings.client.tokenizer.eos_token
-# embeddings.client.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-
-query = "안녕하세요 만나서 반갑습니다."
-vectors = embeddings.encode(sentence_tokenizing(query, "array"))
-print(vectors)
-# test_collection = chroma_client.create_collection(name='test', embedding_function=embedding_function)

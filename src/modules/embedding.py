@@ -5,6 +5,7 @@ from langchain.vectorstores import Chroma
 import pickle
 from soylemma import Lemmatizer
 from konlpy.tag import Okt
+from konlpy.tag import Mecab
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -17,16 +18,17 @@ import numpy as np
 
 #"/prj/out/exp_finetune"
 #"beomi/kcbert-base"
+#BM-K/KoSimCSE-roberta-multitask
 class Embedding_Document:
 
     def __init__(self, save_tfvector_dir, save_doc2vec_dir, save_bert_dir, save_bm25_dir):
-        self.embedd_model = "beomi/kcbert-base"
+        self.embedd_model = 'BM-K/KoSimCSE-roberta-multitask'
         self.save_tfvector_dir = save_tfvector_dir
         self.save_doc2vec_dir = save_doc2vec_dir
         self.save_bert_dir = save_bert_dir
         self.save_bm25_dir = save_bm25_dir
 
-        self.embeddings = SentenceTransformer("beomi/kcbert-base")
+        self.embeddings = SentenceTransformer(self.embedd_model)
     
     # def __get_embedding_model(self):
     #     print("embedding model load")
@@ -56,7 +58,7 @@ class Embedding_Document:
             chunk_overlap  = 0,
             length_function = len,
             is_separator_regex = False,
-            separators=["\n\n","\n"]
+            separators =["\n\n"]
         )
         texts = text_splitter.split_documents(pages)
         return texts
@@ -223,6 +225,7 @@ class Embedding_Document:
             print("split_pdfs")
             texts = self.__split_pages(pages)
 
+
             content = []
             source = []
             origin_content = []
@@ -245,8 +248,11 @@ class Embedding_Document:
                 content.append(result_sentence)
                 source.append((text.metadata['source'],text.metadata['page']))
 
-            for sentence in content:
-                vectors = self.embeddings.encode(sentence)
+            # for sentence in content:
+            #     vectors = self.embeddings.encode(sentence)
+            #     content_vectors.append(vectors)
+            for text in texts:
+                vectors = self.embeddings.encode(text.page_content)
                 content_vectors.append(vectors)
 
 
@@ -391,9 +397,10 @@ class Embedding_Document:
         origin_content = doc_info["origin_content"]
         # content = doc_info["content"]
         source = doc_info["source"]
+        print(origin_content)
 
-        new_query = self.__sentence_tokenizing(query, "string")
-        query_vector = self.embeddings.encode([new_query])
+        # new_query = self.__sentence_tokenizing(query, "string")
+        query_vector = self.embeddings.encode([query])
 
         similarity_scores = cosine_similarity(contentvector, query_vector)
 
@@ -444,23 +451,20 @@ class Embedding_Document:
         source = doc_info["source"]
 
         arr_new_query = self.__sentence_tokenizing(query, "array")
-        str_new_query = self.__sentence_tokenizing(query, "string")
         doc_scores = bm25.get_scores(arr_new_query)
-        doc_scores = softmax(doc_scores)
         document_idx = np.argpartition(-doc_scores, range(k))[0:k]
         # top_documents = [origin_content[i] for i in document_idx]
         doc_scores = [doc_scores[i] for i in document_idx]
 
         #rerank
-        top_content = []
         top_source = []
         top_vector = []
+        top_origin = []
 
 
         if os.path.isfile(f'{self.save_bert_dir}/content.pkl') and os.path.isfile(f'{self.save_bert_dir}/contentvector.pkl'):
             with open(f'{self.save_bert_dir}/content.pkl', 'rb') as f:
                 load_doc_info = pickle.load(f)
-                content = load_doc_info["content"]
                 origin_content = load_doc_info["origin_content"]
                 source = load_doc_info["source"]   
             with open(f'{self.save_bert_dir}/contentvector.pkl', 'rb') as f:
@@ -469,27 +473,25 @@ class Embedding_Document:
             raise Exception("No Bert Datas!!")
 
         for id in document_idx:
-            top_content.append(content[id])
             top_vector.append(contentvector[id])
             top_source.append(source[id])
+            top_origin.append(origin_content[id])
 
+        print(top_origin[0]) #bm25의 결과
 
-        query_vector = self.embeddings.encode([str_new_query])
-
-        similarity_scores = cosine_similarity(query_vector, contentvector)
-
-        similarity_scores = softmax(similarity_scores)
-        result_scores = (1-alpha)*np.array(doc_scores) + alpha*similarity_scores
+        query_vector = self.embeddings.encode([query])
+        similarity_scores = cosine_similarity(query_vector, top_vector)
+        # result_scores = (1-alpha)*np.array(doc_scores) + alpha*similarity_scores
+        result_scores = similarity_scores[0]
         top_results = np.argpartition(-result_scores, range(k))[0:k]
-        print(result_scores)
-        print(top_results)
-        rerank_documents = [top_content[i] for i in top_results]
-        rerank_scores = [results_scores[i] for i in top_results]
+        rerank_documents = [top_origin[i] for i in top_results]
+        rerank_scores = [result_scores[i] for i in top_results]
+        rerank_sources = [top_source[i][0] for i in top_results]
+        rerank_pages = [top_source[i][1] for i in top_results]
+        rerank_scores = list(map(lambda x: float(x), rerank_scores))
 
-
-        print(rerank_documents)
         
-        return rerank_documents[0], "", "", rerank_scores[0]
+        return rerank_documents, rerank_sources, rerank_pages, rerank_scores
 
         
         
