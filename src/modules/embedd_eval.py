@@ -70,6 +70,51 @@ def Set_Dataset():
     # print(questions)
     return contexts, questions
 
+def calculate_average_precision(precision, recall):
+    """
+    정밀도-재현율 곡선을 기반으로 평균 정밀도(mAP)를 계산합니다.
+    """
+    mrec = np.concatenate(([0.], recall, [1.]))
+    mpre = np.concatenate(([0.], precision, [0.]))
+
+    # 정밀도-재현율 곡선을 각각의 구간에서 계산
+    for i in range(mpre.size - 1, 0, -1):
+        mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
+
+    # 구간 별 면적 계산
+    i = np.where(mrec[1:] != mrec[:-1])[0]
+    ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
+
+    return ap
+
+def calculate_map(ground_truth, predictions):
+    """
+    평균 정밀도(mAP)를 계산합니다.
+    """
+    num_ground_truth = len(ground_truth)
+    num_predictions = len(predictions)
+
+    true_positives = np.zeros(num_predictions)
+    false_positives = np.zeros(num_predictions)
+    precision = np.zeros(num_predictions)
+
+    for i, prediction_set in enumerate(predictions):
+        # 각 ground_truth에 대해 true_positives와 false_positives를 계산
+        for j, prediction in enumerate(prediction_set):
+            if prediction['document'] == ground_truth[i]:
+                true_positives[j] = 1
+            else:
+                false_positives[j] = 1
+            precision[j] = np.sum(true_positives) / (np.sum(true_positives) + np.sum(false_positives))
+
+    recall = np.sum(true_positives) / num_ground_truth
+
+    # 평균 정밀도 계산
+    ap = calculate_average_precision(precision, recall)
+
+    return ap
+
+#deprecated
 def mrr_measure(predict_list):
     score = 0
     for predict in predict_list:
@@ -126,29 +171,28 @@ def evaluate(k):
         token_context.append(arr_new_query)
 
     bm25 = BM25Okapi(token_context)
+    ground_truth = []
+    predictions = []
+    bm_predictions = []
 
     for q,a in tqdm(zip(questions, contexts)):
-        bm_top_documents, doc_score = Search(bm25, contexts, q, k)
-        _, top_documents = reranking(embedding, q, bm_top_documents, doc_score, k)
+        bm_top_documents, bm_doc_score = Search(bm25, contexts, q, k)
+        doc_score, top_documents = reranking(embedding, q, bm_top_documents, bm_doc_score, k)
 
-        bool_documents = [0]*k
-        for idx, document in enumerate(top_documents):
-            bool_documents[idx] = int(a == document)
+        ground_truth.append(a)
+        predictions.append([{'document': doc, 'score': score} for doc,score in zip(top_documents, doc_score)])
+        bm_predictions.append([{'document': doc, 'score': score} for doc,score in zip(bm_top_documents, bm_doc_score)])
 
-        bmbert_predict_lists.append(bool_documents)
 
-        bool_documents = [0]*k
-        for idx, document in enumerate(bm_top_documents):
-            bool_documents[idx] = int(a == document)
+    # mAP 계산
+    mAP = calculate_map(ground_truth, predictions)
+    bm25_mAP = calculate_map(ground_truth, bm_predictions)
 
-        bm_predict_lists.append(bool_documents)
 
-        
+    
+    print('BMBERT mAP Score : ', mAP)
+    print('BM25 mAP Score : ', bm25_mAP)
 
-    print('BMBERT MRR Score : ', mrr_measure(bmbert_predict_lists))
-    print('BMBERT Top10 Precision Score : ',top_N_precision(bmbert_predict_lists, k))
-    print('BM25 MRR Score : ', mrr_measure(bm_predict_lists))
-    print('BM25 Top10 Precision Score : ',top_N_precision(bm_predict_lists, k))
 
 
 if __name__ == "__main__":
