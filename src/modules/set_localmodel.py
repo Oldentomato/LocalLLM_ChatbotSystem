@@ -12,10 +12,30 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate
 )
 from .embedding import Embedding_Document
-
+from langchain.schema.retriever import BaseRetriever, Document
+from langchain.callbacks.manager import CallbackManagerForRetrieverRun
+from typing import List
 
 #"beomi/llama-2-ko-7b"
 #"jhgan/ko-sroberta-multitask"
+
+class URRetrival(BaseRetriever):
+
+    def __init__(self, doc_embedd, mode="bmbert", k=3):
+        self.doc_embedd = doc_embedd
+        self.mode = mode
+        self.k = k
+
+    def _get_relevant_documents(
+            self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        if self.mode == "bmbert":
+            content, source, page, score = self.doc_embedd.search_doc_bm_bert(query, self.k)
+            content = list(map(lambda x:Document(page_content=x, metadata={"files": source, "page": page}), content))
+        # response = URAPI(request)
+        # convert response (json or xml) in to langchain Document like  doc = Document(page_content="response docs")
+        # dump all those result in array of docs and return below
+        return content
 
 
 class Set_LocalModel:
@@ -57,8 +77,6 @@ class Set_LocalModel:
         prompt_template = """당신은 문서검색 지원 에이전트입니다.\n
         전반적인 내용은 아래와 같습니다. 이 내용을 이용해서 답변을 해주세요.\n
         {context}
-        요약 정보를 제공하면 그 정보를 활용하여 대답해주세요. 요약 정보는 아래에 있습니다.\n
-        {summary}
         대화 내역을 활용하여 추가적으로 답변을 생성해도 됩니다. 대화 내역은 아래와 같습니다.\n
         {chat_history}
         답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.\n
@@ -112,18 +130,17 @@ class Set_LocalModel:
         elif embedding_mode == "bm25":
             content, source, page, score = self.doc_embedd.bm25_search_doc(query, k)
         elif embedding_mode == "bmbert":
-            content, source, page, score = self.doc_embedd.search_doc_bm_bert(query, k)
+            content, source, page, score = self.doc_embedd.search_doc_bm_bert(query, bm_k=k, k=1)
 
 
         return content, source, page, score
 
     
 
-    def run_QA(self, g, question, embedding_mode="bm25"):
+    def run_QA(self, g, question, embedding_mode="bmbert"):
         try:
-            db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
-            db.get() 
-
+            # db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
+            # db.get() 
 
             streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=False)
 
@@ -161,7 +178,9 @@ class Set_LocalModel:
             memory = ConversationBufferMemory(memory_key="chat_history", human_prefix="question", ai_prefix="answer", return_messages=True)
 
             # Set retriever and LLM
-            retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 3}) # 3개의 답변을 생성하고 유사도를 기준으로 가장 높은 점수를 최종답변으로 도출함
+            # retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 3}) # 3개의 답변을 생성하고 유사도를 기준으로 가장 높은 점수를 최종답변으로 도출함
+            retriever = URRetrival(doc_embedd=self.doc_embedd, mode=embedding_mode)
+
 
             #compression_retriever
             print("qa_chain load")
@@ -175,7 +194,7 @@ class Set_LocalModel:
 
 
             #, "context" : self.context, "chat_history": self.chat_history
-            response = qa_chain({"question":question, "chat_history": self.chat_history, "summary": self.summary})
+            response = qa_chain({"question":question, "chat_history": self.chat_history})
             self.chat_history= [(question, response["answer"])]
 
             g.send(f"\n파일: {os.path.basename(response['source_documents'][0].metadata['source'])}") #3개중에 하나고르는거다보니까 0번으로해버리면 정확해지지가 않음

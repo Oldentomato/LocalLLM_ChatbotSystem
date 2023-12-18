@@ -434,7 +434,7 @@ class Embedding_Document:
         return origin_content[index], source[index][0], source[index][1], return_docs[0][1] 
 
 
-    def search_doc_bm_bert(self, query, k, alpha=0.9):
+    def search_doc_bm_bert(self, query, k, bm_k, alpha=0.9):
         def softmax(x):
             e_x = np.exp(x - np.max(x))
             return e_x / e_x.sum(axis=0)
@@ -452,7 +452,7 @@ class Embedding_Document:
 
         arr_new_query = self.__sentence_tokenizing(query, "array")
         doc_scores = bm25.get_scores(arr_new_query)
-        document_idx = np.argpartition(-doc_scores, range(k))[0:k]
+        document_idx = np.argpartition(-doc_scores, range(k))[0:bm_k]
         # top_documents = [origin_content[i] for i in document_idx]
         doc_scores = [doc_scores[i] for i in document_idx]
 
