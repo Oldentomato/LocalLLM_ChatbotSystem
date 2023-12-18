@@ -8,5 +8,5 @@ def set_external():
     nest_asyncio.apply()
 
 if __name__ == '__main__': 
-    # set_external()
+    set_external()
     uvicorn.run(app="api.api:app" ,host="0.0.0.0", reload=True)

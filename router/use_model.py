@@ -11,7 +11,7 @@ from typing import List,Optional
 
 usemodel = APIRouter()
 local_model = Set_LocalModel()
-# local_model.get_llm_model()
+local_model.get_llm_model()
 # local_model.get_embedding_model()
 # local_model.read_summary()
 

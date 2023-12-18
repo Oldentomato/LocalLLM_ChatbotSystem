@@ -20,18 +20,16 @@ from typing import List
 #"jhgan/ko-sroberta-multitask"
 
 class URRetrival(BaseRetriever):
-
-    def __init__(self, doc_embedd, mode="bmbert", k=3):
-        self.doc_embedd = doc_embedd
-        self.mode = mode
-        self.k = k
+    doc_embedding:Embedding_Document
+    mode:str
+    k:int
 
     def _get_relevant_documents(
             self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
         if self.mode == "bmbert":
-            content, source, page, score = self.doc_embedd.search_doc_bm_bert(query, self.k)
-            content = list(map(lambda x:Document(page_content=x, metadata={"files": source, "page": page}), content))
+            content, source, page, score = self.doc_embedding.search_doc_bm_bert(query, k=1, bm_k=self.k)
+            content = list(map(lambda x:Document(page_content=x, metadata={"source":source,"page":page}), content))
         # response = URAPI(request)
         # convert response (json or xml) in to langchain Document like  doc = Document(page_content="response docs")
         # dump all those result in array of docs and return below
@@ -72,19 +70,18 @@ class Set_LocalModel:
 
 
 
-
+        # 대화 내역을 활용하여 추가적으로 답변을 생성해도 됩니다. 대화 내역은 아래와 같습니다.\n
+        # {chat_history}
     def __set_prompt(self):
         prompt_template = """당신은 문서검색 지원 에이전트입니다.\n
         전반적인 내용은 아래와 같습니다. 이 내용을 이용해서 답변을 해주세요.\n
         {context}
-        대화 내역을 활용하여 추가적으로 답변을 생성해도 됩니다. 대화 내역은 아래와 같습니다.\n
-        {chat_history}
         답을 모르면 모른다고만 하고 답을 만들려고 하지 마세요. 같은 말은 반복하지 마세요.\n
         참고된 pdf의 내용이 없다면, 없다고 답하세요.\n
         """
         system_prompt = PromptTemplate(
             template=prompt_template,
-            input_variables=["context", "chat_history"]
+            input_variables=["context"]
         )
 
         system_message_prompt = SystemMessagePromptTemplate(prompt=system_prompt)
@@ -142,7 +139,7 @@ class Set_LocalModel:
             # db = Chroma(persist_directory="/prj/src/data_store" , embedding_function=self.embeddings)
             # db.get() 
 
-            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=False)
+            streamer = TextStreamer(g=g, tokenizer=self.tokenizer, skip_prompt=True)
 
             pipe = pipeline(
                 "text-generation", 
@@ -179,7 +176,7 @@ class Set_LocalModel:
 
             # Set retriever and LLM
             # retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 3}) # 3개의 답변을 생성하고 유사도를 기준으로 가장 높은 점수를 최종답변으로 도출함
-            retriever = URRetrival(doc_embedd=self.doc_embedd, mode=embedding_mode)
+            retriever = URRetrival(doc_embedding=self.doc_embedd, mode=embedding_mode, k=3)
 
 
             #compression_retriever
@@ -189,13 +186,14 @@ class Set_LocalModel:
                 chain_type="stuff", #map_rerank
                 retriever=retriever,
                 return_source_documents=True,
+                memory=memory,
                 combine_docs_chain_kwargs={"prompt":self.__set_prompt()}
                 )
 
 
             #, "context" : self.context, "chat_history": self.chat_history
-            response = qa_chain({"question":question, "chat_history": self.chat_history})
-            self.chat_history= [(question, response["answer"])]
+            response = qa_chain({"question":question})
+            # self.chat_history= [(question, response["answer"])]
 
             g.send(f"\n파일: {os.path.basename(response['source_documents'][0].metadata['source'])}") #3개중에 하나고르는거다보니까 0번으로해버리면 정확해지지가 않음
             g.send(f"\n페이지: {response['source_documents'][0].metadata['page']}")

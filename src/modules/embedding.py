@@ -54,11 +54,11 @@ class Embedding_Document:
 
     def __split_pages(self, pages):
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size = 1000,
-            chunk_overlap  = 0,
+            chunk_size = 300,
+            chunk_overlap  = 100,
             length_function = len,
             is_separator_regex = False,
-            separators =["\n\n"]
+            separators = ["\n\n"]
         )
         texts = text_splitter.split_documents(pages)
         return texts
@@ -477,7 +477,7 @@ class Embedding_Document:
             top_source.append(source[id])
             top_origin.append(origin_content[id])
 
-        print(top_origin[0]) #bm25의 결과
+        print(f"bm_result: {top_origin[0]}") #bm25의 결과
 
         query_vector = self.embeddings.encode([query])
         similarity_scores = cosine_similarity(query_vector, top_vector)
