@@ -481,8 +481,11 @@ class Embedding_Document:
 
         query_vector = self.embeddings.encode([query])
         similarity_scores = cosine_similarity(query_vector, top_vector)
-        # result_scores = (1-alpha)*np.array(doc_scores) + alpha*similarity_scores
-        result_scores = similarity_scores[0]
+        
+        cos_score = similarity_scores[0]
+        cos_score = softmax(cos_score)
+
+        result_scores = (1-alpha)*np.array(doc_scores) + alpha*cos_score 
         top_results = np.argpartition(-result_scores, range(k))[0:k]
         rerank_documents = [top_origin[i] for i in top_results]
         rerank_scores = [result_scores[i] for i in top_results]

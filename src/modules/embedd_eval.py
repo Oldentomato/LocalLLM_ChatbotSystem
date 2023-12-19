@@ -71,8 +71,6 @@ def Set_Dataset():
     # print(questions)
     return contexts, questions
 
-def compute_precision_recall(targets, predicitions, k):
-    pred = predictions[:k]
 
 
 def mrr_measure(predict_list):
@@ -168,6 +166,7 @@ def evaluate(k):
 
     for q,a in tqdm(zip(questions, contexts)):
         bm_top_documents, doc_score = Search(bm25, set_context, q, k)
+        q = re.sub(r"[^\uAC00-\uD7A30-9a-zA-Z\s]", "", q)
         _, top_documents = reranking(embedding, q, bm_top_documents, doc_score, k)
 
         bert_top_documents = bertSearch(embedding, q, set_context, embedding_context, k)
