@@ -1,44 +1,68 @@
 from sentence_transformers import SentenceTransformer, InputExample, losses
+from sentence_transformers.evaluation import InformationRetrievalEvaluator
 from torch.utils.data import DataLoader
-from transformers import AdamW, get_linear_schedule_with_warmup
-import torch
+import re
+from datasets import load_dataset
 
-# Fine-tuning을 위한 데이터셋 예제 클래스 정의
-class CustomDataset(torch.utils.data.Dataset):
-    def __init__(self, examples):
-        self.examples = examples
+def train_bert(model, dataset_name):
+    BATCH_SIZE = 20
 
-    def __len__(self):
-        return len(self.examples)
+    dataset = load_dataset(dataset_name)
+    num_train = 2000
+    num_validation = 500
 
-    def __getitem__(self, idx):
-        return {"input_ids": self.examples[idx]["input_ids"], "attention_mask": self.examples[idx]["attention_mask"]}
+    stand_id = "6548850-0"
 
-# Fine-tuning 데이터 예제 생성
-train_examples = [
-    InputExample(texts=["question 1", "context 1 for question 1"]),
-    InputExample(texts=["question 2", "context 2 for question 2"]),
-    # 추가적인 fine-tuning 데이터 예제를 여기에 추가
-]
+    train_dataset = []
+    val_corpus = {}
+    val_queries = {}
+    val_relevant_docs = {}
+    relevant_arr = []
 
-# SentenceTransformer 모델 로드
-model_name = 'paraphrase-MiniLM-L6-v2'
-model = SentenceTransformer(model_name)
+    for con, que in zip(dataset["train"]["context"][:num_train], dataset["train"]["question"][:num_train]):
+        train_dataset.append(InputExample(texts=[que, con]))
 
-# Fine-tuning을 위한 데이터로더 생성
-train_dataset = CustomDataset(model.create_batch_hard_triplet_sampler(train_examples))
-train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    for id, con, que in zip(dataset["validation"]["id"][:num_validation], dataset["validation"]["context"][:num_validation], dataset["validation"]["question"][:num_validation]):
+        temp_id = id.split('-')
+        new_id = temp_id[0] + temp_id[1]
+        if new_id == stand_id:
+            relevant_arr.append(id)
+        else:
+            val_relevant_docs[stand_id] = relevant_arr
+            stand_id = new_id
+            relevant_arr = []
+            relevant_arr.append(id)
 
-# Fine-tuning을 위한 Trainer 설정
-num_epochs = 3
-warmup_steps = 100
-optimizer = AdamW(model.parameters(), lr=2e-5)
-scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=len(train_dataloader) * num_epochs)
-loss_function = losses.TripletMarginLoss(margin=0.5)
-trainer = SentenceTransformer.Trainer(model, train_dataloader, optimizer, scheduler=scheduler, loss_function=loss_function, show_progress_bar=True, num_epochs=num_epochs)
+        val_corpus[new_id] = con
+        val_queries[new_id] = que
 
-# Fine-tuning 진행
-trainer.train()
 
-# Fine-tuned 모델 저장
-model.save("fine_tuned_model")
+        
+
+    loader = DataLoader(
+        train_dataset, batch_size=BATCH_SIZE
+    )
+
+    loss = losses.MultipleNegativesRankingLoss(model)
+
+
+    evaluator = InformationRetrievalEvaluator(val_queries, val_corpus, val_relevant_docs)
+
+    EPOCHS = 10
+
+    warmup_steps = int(len(loader) * EPOCHS * 0.1)
+
+    model.fit(
+        train_objectives=[(loader, loss)],
+        epochs=EPOCHS,
+        warmup_steps=warmup_steps,
+        output_path='../../out/exp_finetune',
+        show_progress_bar=True,
+        evaluator=evaluator, 
+        evaluation_steps=50,
+    )
+
+#debugging
+if __name__ == "__main__":
+    embeddings = SentenceTransformer('BM-K/KoSimCSE-roberta-multitask')
+    train_bert(embeddings,"squad_kor_v1")
