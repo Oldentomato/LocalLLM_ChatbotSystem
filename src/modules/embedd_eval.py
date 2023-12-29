@@ -16,8 +16,9 @@ import random
 #jhgan/ko-sroberta-multitask
 #beomi/kcbert-base
 #BM-K/KoSimCSE-roberta-multitask
+#/prj/out/exp_finetune
 def Get_Embedding():
-    embeddings = SentenceTransformer('BM-K/KoSimCSE-roberta-multitask')
+    embeddings = SentenceTransformer('jhgan/ko-sroberta-multitask')
     return embeddings
 
 def find_elements_with_specific_value(tuple_list, target_value):
@@ -72,7 +73,7 @@ def bert_generate_dataset(questions, contexts):
 def Set_Dataset():
     #squad_kor_v1 = Train: 60407 Validation: 5774
     dataset = load_dataset("squad_kor_v1")
-    num_example = 500
+    num_example = 5000
     contexts = []
     questions = []
 
@@ -124,10 +125,10 @@ def reranking(embeddings, query, top_documents, doc_score, k):
 
     cos_scores = similarity_scores.cpu().numpy()
     cos_scores = softmax(cos_scores)
-    # result_scores = (1-alpha)*np.array(doc_score) + alpha*cos_scores 
+    result_scores = (1-alpha)*np.array(doc_score) + alpha*cos_scores 
     #result_scores는 초기 문서의 정보와 코사인 유사도를 적절히 조합하여 최종 결과를 얻기 위해 사용됩니다.
 
-    top_results = np.argpartition(-cos_scores, range(k))[0:k]
+    top_results = np.argpartition(-result_scores, range(k))[0:k]
     rerank_documents = [top_documents[i] for i in top_results]
     rerank_scores = [cos_scores[i] for i in top_results]
 
@@ -181,7 +182,7 @@ def evaluate(k):
         arr_new_query = sentence_tokenizing(con, "array")
         token_context.append(arr_new_query)
 
-    bm25 = BM25Okapi(token_context)
+    bm25 = BM25Okapi(token_context, k1=0.5, b=0.75)
 
 
     for q,a in tqdm(zip(questions, contexts)):
@@ -252,7 +253,7 @@ def test():
 
     
 if __name__ == "__main__":
-    evaluate(k=10)
+    evaluate(k=3)
     # test()
 
 
